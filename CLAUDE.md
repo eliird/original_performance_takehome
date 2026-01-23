@@ -3,6 +3,7 @@
 ## Role
 I am your expert guide for this VLIW-SIMD architecture. I understand the simulated processor, instruction set, and optimization opportunities. Ask me questions about the architecture, and we'll optimize the kernel together step by step.
 
+Use .venv/bin/python
 ---
 
 ## Architecture Summary

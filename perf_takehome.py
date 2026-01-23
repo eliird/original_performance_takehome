@@ -91,19 +91,34 @@ class KernelBuilder:
 
     def build_hash_vectorized(self, vec_val, vec_tmp1, vec_tmp2, hash_const_regs, round, base_i):
         """Vectorized hash - processes VLEN elements in parallel
-        hash_const_regs is a list of (reg1, reg2) tuples containing pre-broadcast constants"""
+        hash_const_regs is a list of:
+        - For stages 0,2,4: (const_vector, multiplier_vector) for multiply_add
+        - For stages 1,3,5: (reg1, reg2) tuples containing pre-broadcast constants
+
+        Uses multiply_add optimization for stages that match pattern: (val + const) + (val << shift)
+        - Stage 0: (val + const) + (val << 12) = val*4097 + const
+        - Stage 2: (val + const) + (val << 5) = val*33 + const
+        - Stage 4: (val + const) + (val << 3) = val*9 + const
+        """
         instrs = []
 
         for hi, (op1, val1, op2, op3, val3) in enumerate(HASH_STAGES):
-            # Use pre-broadcast constants (no broadcast cycle needed!)
             const_reg1, const_reg2 = hash_const_regs[hi]
 
-            # Parallel vector ALU operations (2 cycles instead of 3)
-            instrs.append({"valu": [
-                (op1, vec_tmp1, vec_val, const_reg1),
-                (op3, vec_tmp2, vec_val, const_reg2)
-            ]})
-            instrs.append({"valu": [(op2, vec_val, vec_tmp1, vec_tmp2)]})
+            # Check if this stage can use multiply_add (stages 0, 2, 4)
+            # Pattern: (val + const) + (val << shift) where both ops are '+'
+            if hi in [0, 2, 4] and op1 == "+" and op2 == "+" and op3 == "<<":
+                # For multiply_add stages, const_reg1 = constant, const_reg2 = multiplier
+                # Use multiply_add: val = val * multiplier + const (1 cycle!)
+                instrs.append({"valu": [("multiply_add", vec_val, vec_val,
+                                        const_reg2, const_reg1)]})
+            else:
+                # Standard 2-cycle hash stage
+                instrs.append({"valu": [
+                    (op1, vec_tmp1, vec_val, const_reg1),
+                    (op3, vec_tmp2, vec_val, const_reg2)
+                ]})
+                instrs.append({"valu": [(op2, vec_val, vec_tmp1, vec_tmp2)]})
 
             # Debug compare for each element
             for lane in range(VLEN):
@@ -115,8 +130,16 @@ class KernelBuilder:
         self, forest_height: int, n_nodes: int, batch_size: int, rounds: int
     ):
         """
-        Like reference_kernel2 but building actual instructions.
-        Scalar implementation using only scalar ALU and load/store.
+        Main kernel entry point - uses vectorized implementation for best performance.
+        """
+        return self.build_kernel_vectorized(forest_height, n_nodes, batch_size, rounds)
+
+    def build_kernel_scalar(
+        self, forest_height: int, n_nodes: int, batch_size: int, rounds: int
+    ):
+        """
+        Scalar implementation - kept for reference but not used.
+        The vectorized version is used by default for better performance.
         """
         tmp1 = self.alloc_scratch("tmp1")
         tmp2 = self.alloc_scratch("tmp2")
@@ -342,16 +365,21 @@ class KernelBuilder:
                 # Gather: node_val = mem[forest_values_p + idx] for each lane
                 # Compute all addresses: vec_addr = vec_forest_p + vec_idx
                 # Also pre-broadcast hash constants during gather to utilize idle VALU slots
+                # For stages 0,2,4: broadcast constant and multiplier for multiply_add
+                # For stages 1,3,5: broadcast val1 and val3 as before
 
                 # Cycle 1: Compute addresses + broadcast constants for hash stages 0 & 1
+                # Stage 0: multiply_add needs const=0x7ed55d16, multiplier=4097 (1 + 2^12)
+                # Stage 1: standard needs 0xc761c23c and 19
                 self.instrs.append({"valu": [
                     ("+", vec_addr, vec_forest_p, vec_idx),
-                    ("vbroadcast", hash_const_regs[0][0], self.scratch_const(HASH_STAGES[0][1])),
-                    ("vbroadcast", hash_const_regs[0][1], self.scratch_const(HASH_STAGES[0][4])),
+                    ("vbroadcast", hash_const_regs[0][0], self.scratch_const(HASH_STAGES[0][1])),  # const
+                    ("vbroadcast", hash_const_regs[0][1], self.scratch_const(1 + (1 << HASH_STAGES[0][4]))),  # multiplier 4097
                     ("vbroadcast", hash_const_regs[1][0], self.scratch_const(HASH_STAGES[1][1]))
                 ]})
 
                 # Cycle 2: Load lanes 0-1 + broadcast stage 1 val3 and stage 2 both
+                # Stage 2: multiply_add needs const=0x165667b1, multiplier=33 (1 + 2^5)
                 self.instrs.append({
                     "load": [
                         ("load", vec_node_val + 0, vec_addr + 0),
@@ -359,12 +387,13 @@ class KernelBuilder:
                     ],
                     "valu": [
                         ("vbroadcast", hash_const_regs[1][1], self.scratch_const(HASH_STAGES[1][4])),
-                        ("vbroadcast", hash_const_regs[2][0], self.scratch_const(HASH_STAGES[2][1])),
-                        ("vbroadcast", hash_const_regs[2][1], self.scratch_const(HASH_STAGES[2][4]))
+                        ("vbroadcast", hash_const_regs[2][0], self.scratch_const(HASH_STAGES[2][1])),  # const
+                        ("vbroadcast", hash_const_regs[2][1], self.scratch_const(1 + (1 << HASH_STAGES[2][4])))  # multiplier 33
                     ]
                 })
 
                 # Cycle 3: Load lanes 2-3 + broadcast stage 3 both
+                # Stage 3: standard needs 0xd3a2646c and 9
                 self.instrs.append({
                     "load": [
                         ("load", vec_node_val + 2, vec_addr + 2),
@@ -377,18 +406,20 @@ class KernelBuilder:
                 })
 
                 # Cycle 4: Load lanes 4-5 + broadcast stage 4 both
+                # Stage 4: multiply_add needs const=0xfd7046c5, multiplier=9 (1 + 2^3)
                 self.instrs.append({
                     "load": [
                         ("load", vec_node_val + 4, vec_addr + 4),
                         ("load", vec_node_val + 5, vec_addr + 5)
                     ],
                     "valu": [
-                        ("vbroadcast", hash_const_regs[4][0], self.scratch_const(HASH_STAGES[4][1])),
-                        ("vbroadcast", hash_const_regs[4][1], self.scratch_const(HASH_STAGES[4][4]))
+                        ("vbroadcast", hash_const_regs[4][0], self.scratch_const(HASH_STAGES[4][1])),  # const
+                        ("vbroadcast", hash_const_regs[4][1], self.scratch_const(1 + (1 << HASH_STAGES[4][4])))  # multiplier 9
                     ]
                 })
 
                 # Cycle 5: Load lanes 6-7 + broadcast stage 5 both
+                # Stage 5: standard needs 0xb55a4f09 and 16
                 self.instrs.append({
                     "load": [
                         ("load", vec_node_val + 6, vec_addr + 6),
