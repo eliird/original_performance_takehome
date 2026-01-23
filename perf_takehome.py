@@ -89,6 +89,34 @@ class KernelBuilder:
 
         return instrs
 
+    def build_hash_vectorized(self, vec_val, vec_tmp1, vec_tmp2, vec_const1, vec_const2, round, base_i):
+        """Vectorized hash - processes VLEN elements in parallel
+        vec_const1 and vec_const2 are reusable vector scratch spaces for broadcasting constants"""
+        instrs = []
+
+        for hi, (op1, val1, op2, op3, val3) in enumerate(HASH_STAGES):
+            # Broadcast constants to reusable vector registers
+            val1_scalar = self.scratch_const(val1)
+            val3_scalar = self.scratch_const(val3)
+
+            instrs.append({"valu": [
+                ("vbroadcast", vec_const1, val1_scalar),
+                ("vbroadcast", vec_const2, val3_scalar)
+            ]})
+
+            # Parallel vector ALU operations
+            instrs.append({"valu": [
+                (op1, vec_tmp1, vec_val, vec_const1),
+                (op3, vec_tmp2, vec_val, vec_const2)
+            ]})
+            instrs.append({"valu": [(op2, vec_val, vec_tmp1, vec_tmp2)]})
+
+            # Debug compare for each element
+            for lane in range(VLEN):
+                instrs.append({"debug": [("compare", vec_val + lane, (round, base_i + lane, "hash_stage", hi))]})
+
+        return instrs
+
     def build_kernel(
         self, forest_height: int, n_nodes: int, batch_size: int, rounds: int
     ):
@@ -221,6 +249,154 @@ class KernelBuilder:
         # Required to match with the yield in reference_kernel2
         self.instrs.append({"flow": [("pause",)]})
 
+    def build_kernel_vectorized(
+        self, forest_height: int, n_nodes: int, batch_size: int, rounds: int
+    ):
+        """
+        Vectorized kernel using VLEN=8 SIMD operations.
+        Processes 8 batch items in parallel per iteration.
+        """
+        # Temporary scalar registers
+        tmp1 = self.alloc_scratch("tmp1")
+        tmp2 = self.alloc_scratch("tmp2")
+        tmp3 = self.alloc_scratch("tmp3")
+
+        # Initialize same as scalar version
+        init_vars = [
+            "rounds", "n_nodes", "batch_size", "forest_height",
+            "forest_values_p", "inp_indices_p", "inp_values_p",
+        ]
+        for v in init_vars:
+            self.alloc_scratch(v, 1)
+
+        # Parallel initialization
+        tmp_init = self.alloc_scratch("tmp_init")
+        for i in range(0, len(init_vars), 2):
+            if i + 1 < len(init_vars):
+                self.instrs.append({"load": [
+                    ("const", tmp1, i),
+                    ("const", tmp_init, i + 1)
+                ]})
+                self.instrs.append({"load": [
+                    ("load", self.scratch[init_vars[i]], tmp1),
+                    ("load", self.scratch[init_vars[i + 1]], tmp_init)
+                ]})
+            else:
+                self.add("load", ("const", tmp1, i))
+                self.add("load", ("load", self.scratch[init_vars[i]], tmp1))
+
+        zero_const = self.scratch_const(0)
+        one_const = self.scratch_const(1)
+        two_const = self.scratch_const(2)
+
+        self.add("flow", ("pause",))
+        self.add("debug", ("comment", "Starting vectorized loop"))
+
+        # Vector scratch registers (8 elements each)
+        vec_idx = self.alloc_scratch("vec_idx", VLEN)
+        vec_val = self.alloc_scratch("vec_val", VLEN)
+        vec_node_val = self.alloc_scratch("vec_node_val", VLEN)
+        vec_tmp1 = self.alloc_scratch("vec_tmp1", VLEN)
+        vec_tmp2 = self.alloc_scratch("vec_tmp2", VLEN)
+        vec_tmp3 = self.alloc_scratch("vec_tmp3", VLEN)
+        vec_addr = self.alloc_scratch("vec_addr", VLEN)  # For gather addresses
+        vec_const1 = self.alloc_scratch("vec_const1", VLEN)  # Reusable for hash constants
+        vec_const2 = self.alloc_scratch("vec_const2", VLEN)  # Reusable for hash constants
+
+        # Scalar address registers
+        addr_base_indices = self.alloc_scratch("addr_base_indices")
+        addr_base_values = self.alloc_scratch("addr_base_values")
+
+        # Broadcast constants to vectors
+        vec_one = self.alloc_scratch("vec_one", VLEN)
+        vec_two = self.alloc_scratch("vec_two", VLEN)
+        vec_zero = self.alloc_scratch("vec_zero", VLEN)
+        vec_n_nodes = self.alloc_scratch("vec_n_nodes", VLEN)
+        vec_forest_p = self.alloc_scratch("vec_forest_p", VLEN)
+
+        self.add("valu", ("vbroadcast", vec_one, one_const))
+        self.add("valu", ("vbroadcast", vec_two, two_const))
+        self.add("valu", ("vbroadcast", vec_zero, zero_const))
+        self.add("valu", ("vbroadcast", vec_n_nodes, self.scratch["n_nodes"]))
+        self.add("valu", ("vbroadcast", vec_forest_p, self.scratch["forest_values_p"]))
+
+        for round in range(rounds):
+            for i in range(0, batch_size, VLEN):
+                i_const = self.scratch_const(i)
+
+                # Vector load of indices and values
+                self.instrs.append({"alu": [
+                    ("+", addr_base_indices, self.scratch["inp_indices_p"], i_const),
+                    ("+", addr_base_values, self.scratch["inp_values_p"], i_const)
+                ]})
+                self.instrs.append({"load": [
+                    ("vload", vec_idx, addr_base_indices),
+                    ("vload", vec_val, addr_base_values)
+                ]})
+
+                # Debug compares for loaded values
+                for lane in range(VLEN):
+                    self.add("debug", ("compare", vec_idx + lane, (round, i + lane, "idx")))
+                    self.add("debug", ("compare", vec_val + lane, (round, i + lane, "val")))
+
+                # Gather: node_val = mem[forest_values_p + idx] for each lane
+                # Compute all addresses: vec_addr = vec_forest_p + vec_idx
+                self.add("valu", ("+", vec_addr, vec_forest_p, vec_idx))
+
+                # Manual gather: load from 8 different addresses in parallel (2 LOAD slots)
+                for lane in range(0, VLEN, 2):
+                    self.instrs.append({"load": [
+                        ("load", vec_node_val + lane, vec_addr + lane),
+                        ("load", vec_node_val + lane + 1, vec_addr + lane + 1)
+                    ]})
+
+                # Debug node_val
+                for lane in range(VLEN):
+                    self.add("debug", ("compare", vec_node_val + lane, (round, i + lane, "node_val")))
+
+                # XOR: vec_val = vec_val ^ vec_node_val
+                self.add("valu", ("^", vec_val, vec_val, vec_node_val))
+
+                # Vectorized hash
+                hash_instrs = self.build_hash_vectorized(vec_val, vec_tmp1, vec_tmp2, vec_const1, vec_const2, round, i)
+                self.instrs.extend(hash_instrs)
+
+                # Debug hashed values
+                for lane in range(VLEN):
+                    self.add("debug", ("compare", vec_val + lane, (round, i + lane, "hashed_val")))
+
+                # Index computation: vec_idx = 2*vec_idx + (1 if vec_val % 2 == 0 else 2)
+                # vec_tmp1 = vec_val & 1
+                # vec_idx = vec_idx * 2
+                self.instrs.append({"valu": [
+                    ("&", vec_tmp1, vec_val, vec_one),
+                    ("*", vec_idx, vec_idx, vec_two)
+                ]})
+                # vec_tmp3 = 1 + vec_tmp1
+                self.add("valu", ("+", vec_tmp3, vec_one, vec_tmp1))
+                # vec_idx = vec_idx + vec_tmp3
+                self.add("valu", ("+", vec_idx, vec_idx, vec_tmp3))
+
+                # Debug next_idx
+                for lane in range(VLEN):
+                    self.add("debug", ("compare", vec_idx + lane, (round, i + lane, "next_idx")))
+
+                # Bounds check: vec_idx = 0 if vec_idx >= n_nodes else vec_idx
+                self.add("valu", ("<", vec_tmp1, vec_idx, vec_n_nodes))
+                self.add("flow", ("vselect", vec_idx, vec_tmp1, vec_idx, vec_zero))
+
+                # Debug wrapped_idx
+                for lane in range(VLEN):
+                    self.add("debug", ("compare", vec_idx + lane, (round, i + lane, "wrapped_idx")))
+
+                # Vector store of results
+                self.instrs.append({"store": [
+                    ("vstore", addr_base_indices, vec_idx),
+                    ("vstore", addr_base_values, vec_val)
+                ]})
+
+        self.instrs.append({"flow": [("pause",)]})
+
 BASELINE = 147734
 
 def do_kernel_test(
@@ -273,6 +449,49 @@ def do_kernel_test(
     return machine.cycle
 
 
+def do_kernel_test_vectorized(
+    forest_height: int,
+    rounds: int,
+    batch_size: int,
+    seed: int = 123,
+    trace: bool = False,
+    prints: bool = False,
+):
+    print(f"VECTORIZED: {forest_height=}, {rounds=}, {batch_size=}")
+    random.seed(seed)
+    forest = Tree.generate(forest_height)
+    inp = Input.generate(forest, batch_size, rounds)
+    mem = build_mem_image(forest, inp)
+
+    kb = KernelBuilder()
+    kb.build_kernel_vectorized(forest.height, len(forest.values), len(inp.indices), rounds)
+
+    value_trace = {}
+    machine = Machine(
+        mem,
+        kb.instrs,
+        kb.debug_info(),
+        n_cores=N_CORES,
+        value_trace=value_trace,
+        trace=trace,
+    )
+    machine.prints = prints
+    for i, ref_mem in enumerate(reference_kernel2(mem, value_trace)):
+        machine.run()
+        inp_values_p = ref_mem[6]
+        if prints:
+            print(machine.mem[inp_values_p : inp_values_p + len(inp.values)])
+            print(ref_mem[inp_values_p : inp_values_p + len(inp.values)])
+        assert (
+            machine.mem[inp_values_p : inp_values_p + len(inp.values)]
+            == ref_mem[inp_values_p : inp_values_p + len(inp.values)]
+        ), f"Incorrect result on round {i}"
+
+    print("CYCLES: ", machine.cycle)
+    print("Speedup over baseline: ", BASELINE / machine.cycle)
+    return machine.cycle
+
+
 class Tests(unittest.TestCase):
     def test_ref_kernels(self):
         """
@@ -292,6 +511,10 @@ class Tests(unittest.TestCase):
     def test_kernel_trace(self):
         # Full-scale example for performance testing
         do_kernel_test(10, 16, 256, trace=True, prints=False)
+
+    def test_kernel_vectorized(self):
+        # Test vectorized version
+        do_kernel_test_vectorized(10, 16, 256)
 
     # Passing this test is not required for submission, see submission_tests.py for the actual correctness test
     # You can uncomment this if you think it might help you debug
