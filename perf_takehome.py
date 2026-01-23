@@ -75,15 +75,19 @@ class KernelBuilder:
         return self.const_map[val]
 
     def build_hash(self, val_hash_addr, tmp1, tmp2, round, i):
-        slots = []
+        """Build hash with parallelized independent ALU operations"""
+        instrs = []
 
         for hi, (op1, val1, op2, op3, val3) in enumerate(HASH_STAGES):
-            slots.append(("alu", (op1, tmp1, val_hash_addr, self.scratch_const(val1))))
-            slots.append(("alu", (op3, tmp2, val_hash_addr, self.scratch_const(val3))))
-            slots.append(("alu", (op2, val_hash_addr, tmp1, tmp2)))
-            slots.append(("debug", ("compare", val_hash_addr, (round, i, "hash_stage", hi))))
+            # Bundle two independent ALU operations in one cycle
+            instrs.append({"alu": [
+                (op1, tmp1, val_hash_addr, self.scratch_const(val1)),
+                (op3, tmp2, val_hash_addr, self.scratch_const(val3))
+            ]})
+            instrs.append({"alu": [(op2, val_hash_addr, tmp1, tmp2)]})
+            instrs.append({"debug": [("compare", val_hash_addr, (round, i, "hash_stage", hi))]})
 
-        return slots
+        return instrs
 
     def build_kernel(
         self, forest_height: int, n_nodes: int, batch_size: int, rounds: int
@@ -173,8 +177,16 @@ class KernelBuilder:
                 body.append(("debug", ("compare", tmp_node_val, (round, i, "node_val"))))
                 # val = myhash(val ^ node_val)
                 body.append(("alu", ("^", tmp_val, tmp_val, tmp_node_val)))
-                body.extend(self.build_hash(tmp_val, tmp1, tmp2, round, i))
-                body.append(("debug", ("compare", tmp_val, (round, i, "hashed_val"))))
+
+                # Process body up to hash
+                body_instrs = self.build(body)
+                self.instrs.extend(body_instrs)
+                body = []
+
+                # Add parallelized hash instructions
+                self.instrs.extend(self.build_hash(tmp_val, tmp1, tmp2, round, i))
+                self.add("debug", ("compare", tmp_val, (round, i, "hashed_val")))
+
                 # idx = 2*idx + (1 if val % 2 == 0 else 2)
                 body.append(("alu", ("%", tmp1, tmp_val, two_const)))
                 body.append(("alu", ("==", tmp1, tmp1, zero_const)))
@@ -187,10 +199,10 @@ class KernelBuilder:
                 body.append(("flow", ("select", tmp_idx, tmp1, tmp_idx, zero_const)))
                 body.append(("debug", ("compare", tmp_idx, (round, i, "wrapped_idx"))))
 
-                # Process the body instructions built so far
+                # Process the remaining body instructions
                 body_instrs = self.build(body)
                 self.instrs.extend(body_instrs)
-                body = []  # Reset for next iteration
+                body = []
 
                 # Parallel store of idx and val - compute both addresses in parallel
                 self.instrs.append({"alu": [
