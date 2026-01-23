@@ -153,20 +153,23 @@ class KernelBuilder:
         tmp_node_val = self.alloc_scratch("tmp_node_val")
         tmp_addr = self.alloc_scratch("tmp_addr")
         tmp_addr2 = self.alloc_scratch("tmp_addr2")  # Second address register for parallel loads
+        # Dedicated address registers for input/output (reused between load and store)
+        addr_indices = self.alloc_scratch("addr_indices")
+        addr_values = self.alloc_scratch("addr_values")
 
         for round in range(rounds):
             for i in range(batch_size):
                 i_const = self.scratch_const(i)
 
-                # Parallel load of idx and val - compute both addresses in parallel
+                # Parallel load of idx and val - compute both addresses in parallel (ONCE)
                 self.instrs.append({"alu": [
-                    ("+", tmp_addr, self.scratch["inp_indices_p"], i_const),
-                    ("+", tmp_addr2, self.scratch["inp_values_p"], i_const)
+                    ("+", addr_indices, self.scratch["inp_indices_p"], i_const),
+                    ("+", addr_values, self.scratch["inp_values_p"], i_const)
                 ]})
                 # Load both values in parallel
                 self.instrs.append({"load": [
-                    ("load", tmp_idx, tmp_addr),
-                    ("load", tmp_val, tmp_addr2)
+                    ("load", tmp_idx, addr_indices),
+                    ("load", tmp_val, addr_values)
                 ]})
                 self.add("debug", ("compare", tmp_idx, (round, i, "idx")))
                 self.add("debug", ("compare", tmp_val, (round, i, "val")))
@@ -199,6 +202,7 @@ class KernelBuilder:
                 # Cycle 3: idx = idx + tmp3
                 body.append(("alu", ("+", tmp_idx, tmp_idx, tmp3)))
                 body.append(("debug", ("compare", tmp_idx, (round, i, "next_idx"))))
+                
                 # idx = 0 if idx >= n_nodes else idx
                 body.append(("alu", ("<", tmp1, tmp_idx, self.scratch["n_nodes"])))
                 body.append(("flow", ("select", tmp_idx, tmp1, tmp_idx, zero_const)))
@@ -209,15 +213,10 @@ class KernelBuilder:
                 self.instrs.extend(body_instrs)
                 body = []
 
-                # Parallel store of idx and val - compute both addresses in parallel
-                self.instrs.append({"alu": [
-                    ("+", tmp_addr, self.scratch["inp_indices_p"], i_const),
-                    ("+", tmp_addr2, self.scratch["inp_values_p"], i_const)
-                ]})
-                # Store both values in parallel
+                # Store both values in parallel - reuse addresses from load (no recomputation!)
                 self.instrs.append({"store": [
-                    ("store", tmp_addr, tmp_idx),
-                    ("store", tmp_addr2, tmp_val)
+                    ("store", addr_indices, tmp_idx),
+                    ("store", addr_values, tmp_val)
                 ]})
         # Required to match with the yield in reference_kernel2
         self.instrs.append({"flow": [("pause",)]})
