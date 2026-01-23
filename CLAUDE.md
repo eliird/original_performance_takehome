@@ -151,7 +151,6 @@ I will talk to you, you explain things guide me and we optimize small things one
 - Add extra scratch registers as needed
 - Reorder operations (respecting dependencies)
 - Use vectorization (VALU, vload, vstore)
-- Modify the `build()` method for better VLIW packing
 
 ---
 
