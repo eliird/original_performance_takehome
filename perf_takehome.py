@@ -107,9 +107,27 @@ class KernelBuilder:
         ]
         for v in init_vars:
             self.alloc_scratch(v, 1)
-        for i, v in enumerate(init_vars):
-            self.add("load", ("const", tmp1, i))
-            self.add("load", ("load", self.scratch[v], tmp1))
+
+        # Parallelized initialization using 2 load slots per cycle
+        tmp_init = self.alloc_scratch("tmp_init")
+
+        # Process pairs of variables
+        for i in range(0, len(init_vars), 2):
+            if i + 1 < len(init_vars):
+                # Load two constants in parallel
+                self.instrs.append({"load": [
+                    ("const", tmp1, i),
+                    ("const", tmp_init, i + 1)
+                ]})
+                # Load two values in parallel
+                self.instrs.append({"load": [
+                    ("load", self.scratch[init_vars[i]], tmp1),
+                    ("load", self.scratch[init_vars[i + 1]], tmp_init)
+                ]})
+            else:
+                # Odd number of variables, handle last one
+                self.add("load", ("const", tmp1, i))
+                self.add("load", ("load", self.scratch[init_vars[i]], tmp1))
 
         zero_const = self.scratch_const(0)
         one_const = self.scratch_const(1)
