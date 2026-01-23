@@ -89,25 +89,19 @@ class KernelBuilder:
 
         return instrs
 
-    def build_hash_vectorized(self, vec_val, vec_tmp1, vec_tmp2, vec_const1, vec_const2, round, base_i):
+    def build_hash_vectorized(self, vec_val, vec_tmp1, vec_tmp2, hash_const_regs, round, base_i):
         """Vectorized hash - processes VLEN elements in parallel
-        vec_const1 and vec_const2 are reusable vector scratch spaces for broadcasting constants"""
+        hash_const_regs is a list of (reg1, reg2) tuples containing pre-broadcast constants"""
         instrs = []
 
         for hi, (op1, val1, op2, op3, val3) in enumerate(HASH_STAGES):
-            # Broadcast constants to reusable vector registers
-            val1_scalar = self.scratch_const(val1)
-            val3_scalar = self.scratch_const(val3)
+            # Use pre-broadcast constants (no broadcast cycle needed!)
+            const_reg1, const_reg2 = hash_const_regs[hi]
 
+            # Parallel vector ALU operations (2 cycles instead of 3)
             instrs.append({"valu": [
-                ("vbroadcast", vec_const1, val1_scalar),
-                ("vbroadcast", vec_const2, val3_scalar)
-            ]})
-
-            # Parallel vector ALU operations
-            instrs.append({"valu": [
-                (op1, vec_tmp1, vec_val, vec_const1),
-                (op3, vec_tmp2, vec_val, vec_const2)
+                (op1, vec_tmp1, vec_val, const_reg1),
+                (op3, vec_tmp2, vec_val, const_reg2)
             ]})
             instrs.append({"valu": [(op2, vec_val, vec_tmp1, vec_tmp2)]})
 
@@ -300,8 +294,14 @@ class KernelBuilder:
         vec_tmp2 = self.alloc_scratch("vec_tmp2", VLEN)
         vec_tmp3 = self.alloc_scratch("vec_tmp3", VLEN)
         vec_addr = self.alloc_scratch("vec_addr", VLEN)  # For gather addresses
-        vec_const1 = self.alloc_scratch("vec_const1", VLEN)  # Reusable for hash constants
-        vec_const2 = self.alloc_scratch("vec_const2", VLEN)  # Reusable for hash constants
+
+        # Pre-allocate dedicated vector registers for all hash constants
+        # 6 hash stages × 2 constants each = 12 total registers
+        hash_const_regs = []
+        for stage_idx in range(len(HASH_STAGES)):
+            reg1 = self.alloc_scratch(f"hash_c{stage_idx}_v1", VLEN)
+            reg2 = self.alloc_scratch(f"hash_c{stage_idx}_v2", VLEN)
+            hash_const_regs.append((reg1, reg2))
 
         # Scalar address registers
         addr_base_indices = self.alloc_scratch("addr_base_indices")
@@ -341,14 +341,64 @@ class KernelBuilder:
 
                 # Gather: node_val = mem[forest_values_p + idx] for each lane
                 # Compute all addresses: vec_addr = vec_forest_p + vec_idx
-                self.add("valu", ("+", vec_addr, vec_forest_p, vec_idx))
+                # Also pre-broadcast hash constants during gather to utilize idle VALU slots
 
-                # Manual gather: load from 8 different addresses in parallel (2 LOAD slots)
-                for lane in range(0, VLEN, 2):
-                    self.instrs.append({"load": [
-                        ("load", vec_node_val + lane, vec_addr + lane),
-                        ("load", vec_node_val + lane + 1, vec_addr + lane + 1)
-                    ]})
+                # Cycle 1: Compute addresses + broadcast constants for hash stages 0 & 1
+                self.instrs.append({"valu": [
+                    ("+", vec_addr, vec_forest_p, vec_idx),
+                    ("vbroadcast", hash_const_regs[0][0], self.scratch_const(HASH_STAGES[0][1])),
+                    ("vbroadcast", hash_const_regs[0][1], self.scratch_const(HASH_STAGES[0][4])),
+                    ("vbroadcast", hash_const_regs[1][0], self.scratch_const(HASH_STAGES[1][1]))
+                ]})
+
+                # Cycle 2: Load lanes 0-1 + broadcast stage 1 val3 and stage 2 both
+                self.instrs.append({
+                    "load": [
+                        ("load", vec_node_val + 0, vec_addr + 0),
+                        ("load", vec_node_val + 1, vec_addr + 1)
+                    ],
+                    "valu": [
+                        ("vbroadcast", hash_const_regs[1][1], self.scratch_const(HASH_STAGES[1][4])),
+                        ("vbroadcast", hash_const_regs[2][0], self.scratch_const(HASH_STAGES[2][1])),
+                        ("vbroadcast", hash_const_regs[2][1], self.scratch_const(HASH_STAGES[2][4]))
+                    ]
+                })
+
+                # Cycle 3: Load lanes 2-3 + broadcast stage 3 both
+                self.instrs.append({
+                    "load": [
+                        ("load", vec_node_val + 2, vec_addr + 2),
+                        ("load", vec_node_val + 3, vec_addr + 3)
+                    ],
+                    "valu": [
+                        ("vbroadcast", hash_const_regs[3][0], self.scratch_const(HASH_STAGES[3][1])),
+                        ("vbroadcast", hash_const_regs[3][1], self.scratch_const(HASH_STAGES[3][4]))
+                    ]
+                })
+
+                # Cycle 4: Load lanes 4-5 + broadcast stage 4 both
+                self.instrs.append({
+                    "load": [
+                        ("load", vec_node_val + 4, vec_addr + 4),
+                        ("load", vec_node_val + 5, vec_addr + 5)
+                    ],
+                    "valu": [
+                        ("vbroadcast", hash_const_regs[4][0], self.scratch_const(HASH_STAGES[4][1])),
+                        ("vbroadcast", hash_const_regs[4][1], self.scratch_const(HASH_STAGES[4][4]))
+                    ]
+                })
+
+                # Cycle 5: Load lanes 6-7 + broadcast stage 5 both
+                self.instrs.append({
+                    "load": [
+                        ("load", vec_node_val + 6, vec_addr + 6),
+                        ("load", vec_node_val + 7, vec_addr + 7)
+                    ],
+                    "valu": [
+                        ("vbroadcast", hash_const_regs[5][0], self.scratch_const(HASH_STAGES[5][1])),
+                        ("vbroadcast", hash_const_regs[5][1], self.scratch_const(HASH_STAGES[5][4]))
+                    ]
+                })
 
                 # Debug node_val
                 for lane in range(VLEN):
@@ -357,8 +407,8 @@ class KernelBuilder:
                 # XOR: vec_val = vec_val ^ vec_node_val
                 self.add("valu", ("^", vec_val, vec_val, vec_node_val))
 
-                # Vectorized hash
-                hash_instrs = self.build_hash_vectorized(vec_val, vec_tmp1, vec_tmp2, vec_const1, vec_const2, round, i)
+                # Vectorized hash (using pre-broadcast constants)
+                hash_instrs = self.build_hash_vectorized(vec_val, vec_tmp1, vec_tmp2, hash_const_regs, round, i)
                 self.instrs.extend(hash_instrs)
 
                 # Debug hashed values
