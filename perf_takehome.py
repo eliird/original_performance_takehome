@@ -105,11 +105,16 @@ class KernelBuilder:
             "inp_indices_p",
             "inp_values_p",
         ]
-        for v in init_vars:
+        # Allocate 8 consecutive scratch slots for init_vars (7 used + 1 extra from vload)
+        init_vars_base = self.alloc_scratch("rounds", 1)
+        for v in init_vars[1:]:
             self.alloc_scratch(v, 1)
-        for i, v in enumerate(init_vars):
-            self.add("load", ("const", tmp1, i))
-            self.add("load", ("load", self.scratch[v], tmp1))
+        # Extra slot for the 8th value loaded by vload (mem[7] = extra_room pointer)
+        self.alloc_scratch("extra_room_p", 1)
+
+        # Use vload to load all 8 values from mem[0:8] in one instruction
+        self.add("load", ("const", tmp1, 0))
+        self.add("load", ("vload", init_vars_base, tmp1))
 
         zero_const = self.scratch_const(0)
         one_const = self.scratch_const(1)
@@ -130,17 +135,20 @@ class KernelBuilder:
         tmp_val = self.alloc_scratch("tmp_val")
         tmp_node_val = self.alloc_scratch("tmp_node_val")
         tmp_addr = self.alloc_scratch("tmp_addr")
+        # Address registers for optimization #2: save computed addresses
+        tmp_idx_addr = self.alloc_scratch("tmp_idx_addr")
+        tmp_val_addr = self.alloc_scratch("tmp_val_addr")
 
         for round in range(rounds):
             for i in range(batch_size):
                 i_const = self.scratch_const(i)
-                # idx = mem[inp_indices_p + i]
-                body.append(("alu", ("+", tmp_addr, self.scratch["inp_indices_p"], i_const)))
-                body.append(("load", ("load", tmp_idx, tmp_addr)))
+                # idx = mem[inp_indices_p + i] - compute and save address
+                body.append(("alu", ("+", tmp_idx_addr, self.scratch["inp_indices_p"], i_const)))
+                body.append(("load", ("load", tmp_idx, tmp_idx_addr)))
                 body.append(("debug", ("compare", tmp_idx, (round, i, "idx"))))
-                # val = mem[inp_values_p + i]
-                body.append(("alu", ("+", tmp_addr, self.scratch["inp_values_p"], i_const)))
-                body.append(("load", ("load", tmp_val, tmp_addr)))
+                # val = mem[inp_values_p + i] - compute and save address
+                body.append(("alu", ("+", tmp_val_addr, self.scratch["inp_values_p"], i_const)))
+                body.append(("load", ("load", tmp_val, tmp_val_addr)))
                 body.append(("debug", ("compare", tmp_val, (round, i, "val"))))
                 # node_val = mem[forest_values_p + idx]
                 body.append(("alu", ("+", tmp_addr, self.scratch["forest_values_p"], tmp_idx)))
@@ -161,12 +169,10 @@ class KernelBuilder:
                 body.append(("alu", ("<", tmp1, tmp_idx, self.scratch["n_nodes"])))
                 body.append(("flow", ("select", tmp_idx, tmp1, tmp_idx, zero_const)))
                 body.append(("debug", ("compare", tmp_idx, (round, i, "wrapped_idx"))))
-                # mem[inp_indices_p + i] = idx
-                body.append(("alu", ("+", tmp_addr, self.scratch["inp_indices_p"], i_const)))
-                body.append(("store", ("store", tmp_addr, tmp_idx)))
-                # mem[inp_values_p + i] = val
-                body.append(("alu", ("+", tmp_addr, self.scratch["inp_values_p"], i_const)))
-                body.append(("store", ("store", tmp_addr, tmp_val)))
+                # mem[inp_indices_p + i] = idx - reuse saved address
+                body.append(("store", ("store", tmp_idx_addr, tmp_idx)))
+                # mem[inp_values_p + i] = val - reuse saved address
+                body.append(("store", ("store", tmp_val_addr, tmp_val)))
 
         body_instrs = self.build(body)
         self.instrs.extend(body_instrs)
