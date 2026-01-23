@@ -447,16 +447,15 @@ class KernelBuilder:
                     self.add("debug", ("compare", vec_val + lane, (round, i + lane, "hashed_val")))
 
                 # Index computation: vec_idx = 2*vec_idx + (1 if vec_val % 2 == 0 else 2)
-                # vec_tmp1 = vec_val & 1
-                # vec_idx = vec_idx * 2
+                # Optimized to 2 cycles by combining operations
+                # Original formula: idx = 2*idx + 1 + (val & 1)
+                # Cycle 1: Compute parity AND add 1 to doubled index in parallel
                 self.instrs.append({"valu": [
-                    ("&", vec_tmp1, vec_val, vec_one),
-                    ("*", vec_idx, vec_idx, vec_two)
+                    ("&", vec_tmp1, vec_val, vec_one),          # tmp1 = val & 1
+                    ("multiply_add", vec_idx, vec_idx, vec_two, vec_one)  # idx = idx*2 + 1
                 ]})
-                # vec_tmp3 = 1 + vec_tmp1
-                self.add("valu", ("+", vec_tmp3, vec_one, vec_tmp1))
-                # vec_idx = vec_idx + vec_tmp3
-                self.add("valu", ("+", vec_idx, vec_idx, vec_tmp3))
+                # Cycle 2: Add the parity bit
+                self.add("valu", ("+", vec_idx, vec_idx, vec_tmp1))
 
                 # Debug next_idx
                 for lane in range(VLEN):
