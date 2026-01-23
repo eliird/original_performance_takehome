@@ -188,10 +188,15 @@ class KernelBuilder:
                 self.add("debug", ("compare", tmp_val, (round, i, "hashed_val")))
 
                 # idx = 2*idx + (1 if val % 2 == 0 else 2)
-                body.append(("alu", ("%", tmp1, tmp_val, two_const)))
-                body.append(("alu", ("==", tmp1, tmp1, zero_const)))
-                body.append(("flow", ("select", tmp3, tmp1, one_const, two_const)))
-                body.append(("alu", ("*", tmp_idx, tmp_idx, two_const)))
+                # Optimized: use bitwise AND instead of modulo, parallelize independent ops
+                # Cycle 1: Parallel - get parity bit and double index
+                self.instrs.append({"alu": [
+                    ("&", tmp1, tmp_val, one_const),        # tmp1 = val & 1 (0 if even, 1 if odd)
+                    ("*", tmp_idx, tmp_idx, two_const)      # idx = idx * 2
+                ]})
+                # Cycle 2: tmp3 = 1 + tmp1 (gives 1 if even, 2 if odd)
+                body.append(("alu", ("+", tmp3, one_const, tmp1)))
+                # Cycle 3: idx = idx + tmp3
                 body.append(("alu", ("+", tmp_idx, tmp_idx, tmp3)))
                 body.append(("debug", ("compare", tmp_idx, (round, i, "next_idx"))))
                 # idx = 0 if idx >= n_nodes else idx

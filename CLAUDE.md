@@ -93,9 +93,72 @@ for i in range(0, len(init_vars), 2):
 Initialization runs once, but the main loop runs 16 × 256 = 4,096 times.
 To get significant speedup, we need to optimize the main loop body.
 
+### ✅ Optimization #2: Parallelized Input Loads & Output Stores (Lines 157-166, 204-212)
+
+**What we changed:**
+- Allocated second address register `tmp_addr2` to avoid register conflicts
+- Parallelized loading of `idx` and `val` from memory
+- Parallelized storing of `idx` and `val` back to memory
+
+**How it works:**
+```python
+# Parallel loads - compute both addresses in parallel (2 ALU slots)
+self.instrs.append({"alu": [
+    ("+", tmp_addr, inp_indices_p, i_const),
+    ("+", tmp_addr2, inp_values_p, i_const)
+]})
+# Load both values in parallel (2 LOAD slots)
+self.instrs.append({"load": [
+    ("load", tmp_idx, tmp_addr),
+    ("load", tmp_val, tmp_addr2)
+]})
+
+# ... later: Parallel stores work the same way
+```
+
+**Results:**
+- **Cycles saved:** 4 cycles per iteration × 4,096 iterations = 16,384 cycles
+- **New total:** 131,344 cycles
+- **Speedup:** 1.125x (12.5% improvement)
+
+### ✅ Optimization #3: Parallelized Hash Function (Lines 77-90)
+
+**What we changed:**
+- Modified `build_hash()` to bundle two independent ALU operations per hash stage
+- Each hash stage has: `tmp1 = op1(val, const1)` and `tmp2 = op3(val, const3)` which are independent
+
+**How it works:**
+```python
+# Before: 3 cycles per stage
+# Cycle 1: tmp1 = op1(val, const1)
+# Cycle 2: tmp2 = op3(val, const3)
+# Cycle 3: val = op2(tmp1, tmp2)
+
+# After: 2 cycles per stage
+# Cycle 1: tmp1 = op1(val, const1) AND tmp2 = op3(val, const3)  [PARALLEL]
+# Cycle 2: val = op2(tmp1, tmp2)
+
+instrs.append({"alu": [
+    (op1, tmp1, val_hash_addr, self.scratch_const(val1)),
+    (op3, tmp2, val_hash_addr, self.scratch_const(val3))
+]})
+instrs.append({"alu": [(op2, val_hash_addr, tmp1, tmp2)]})
+```
+
+**Results:**
+- **Cycles saved:** 1 cycle per stage × 6 stages × 4,096 iterations = 24,576 cycles
+- **New total:** 106,768 cycles
+- **Speedup:** 1.384x (38.4% improvement over baseline!)
+
 ---
 
 ## Development Principles
+
+### IMPORTANT: Discuss Before Implementing
+- **ALWAYS discuss the optimization approach with the user BEFORE implementing**
+- Explain what you plan to change and why
+- Wait for user approval before making code changes
+- Never implement changes directly without discussion
 
 ### IMPORTANT: One Change at a Time
 - Make **minimal, focused changes**
