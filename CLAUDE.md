@@ -97,3 +97,49 @@ body.append(("store", ("store", tmp_val_addr, tmp_val)))
 - Addresses don't change during iteration
 - No writes to base pointers (`inp_indices_p`, `inp_values_p`)
 - Simple register reuse optimization
+
+### 3. VLIW Packing for Independent Loads (Lines 145-151)
+**Location:** `perf_takehome.py:145-151`
+
+**Current implementation:**
+```python
+# idx = mem[inp_indices_p + i] - compute and save address
+body.append(("alu", ("+", tmp_idx_addr, self.scratch["inp_indices_p"], i_const)))
+body.append(("load", ("load", tmp_idx, tmp_idx_addr)))
+# val = mem[inp_values_p + i] - compute and save address
+body.append(("alu", ("+", tmp_val_addr, self.scratch["inp_values_p"], i_const)))
+body.append(("load", ("load", tmp_val, tmp_val_addr)))
+```
+- Uses `body.append()` which goes through `build()` function
+- `build()` creates one instruction bundle per slot
+- Results in 4 separate cycles for independent operations
+
+**Problem:**
+- Computing `tmp_idx_addr` and `tmp_val_addr` are independent → wasted parallelism
+- Loading `tmp_idx` and `tmp_val` are independent → wasted parallelism
+- Total: 4 cycles for operations that could be done in 2 cycles
+
+**Optimization:**
+Use `self.instrs.append()` directly to pack independent operations into VLIW bundles:
+```python
+# Compute both addresses in parallel (2 ALU slots in 1 cycle)
+self.instrs.append({"alu": [
+    ("+", tmp_idx_addr, self.scratch["inp_indices_p"], i_const),
+    ("+", tmp_val_addr, self.scratch["inp_values_p"], i_const)
+]})
+# Load both values in parallel (2 LOAD slots in 1 cycle)
+self.instrs.append({"load": [
+    ("load", tmp_idx, tmp_idx_addr),
+    ("load", tmp_val, tmp_val_addr)
+]})
+```
+
+**Savings:** 2 cycles per inner loop iteration = `2 × rounds × batch_size` cycles
+- For test case (rounds=16, batch=256): 2 × 16 × 256 = **8,192 cycles**
+
+**Rationale:**
+- ALU has 12 slots, we're only using 2
+- LOAD has 2 slots, we're using both
+- Both address computations are independent (no data dependencies)
+- Both loads are independent (different memory locations)
+- VLIW architecture designed for this exact pattern
