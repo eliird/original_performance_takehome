@@ -173,6 +173,76 @@ class KernelBuilder:
         # Required to match with the yield in reference_kernel2
         self.instrs.append({"flow": [("pause",)]})
 
+        # Write instructions to file for debugging - table format by cycle
+        self._write_instruction_log(rounds, batch_size)
+
+    def _write_instruction_log(self, rounds, batch_size):
+        """Write instruction log with cycle-by-cycle table and stats."""
+        import os
+        engines = ["load", "valu", "alu", "store", "flow"]
+        col_widths = {"load": 55, "valu": 70, "alu": 70, "store": 45, "flow": 35}
+
+        with open(f'{os.getcwd()}/instructions.txt', 'w') as f:
+            f.write(f"Total instructions: {len(self.instrs)}\n")
+            f.write(f"Rounds: {rounds}, Batch size: {batch_size}\n")
+            f.write("=" * 150 + "\n\n")
+
+            # Header
+            header = f"{'CYC':<5}|"
+            for eng in engines:
+                header += f" {eng.upper():<{col_widths[eng]}}|"
+            f.write(header + "\n")
+            f.write("-" * len(header) + "\n")
+
+            # Track stats
+            total_cycles = 0
+            total_stats = {eng: 0 for eng in engines}
+            total_ops = {eng: 0 for eng in engines}
+
+            # Each instruction is one cycle
+            for cycle, instr in enumerate(self.instrs):
+                # Check for iteration markers in debug
+                if "debug" in instr and instr["debug"][0][0] == "comment" and "=====" in str(instr["debug"][0][1]):
+                    marker = instr["debug"][0][1]
+                    f.write(f"\n{marker}\n")
+                    f.write("-" * len(header) + "\n")
+                    continue
+
+                # Skip debug-only instructions
+                if list(instr.keys()) == ["debug"]:
+                    continue
+
+                # Count this as an actual execution cycle
+                total_cycles += 1
+
+                # Count stats
+                for eng in engines:
+                    if eng in instr:
+                        total_stats[eng] += 1
+                        total_ops[eng] += len(instr[eng])
+
+                row = f"{cycle:<5}|"
+                for eng in engines:
+                    if eng in instr:
+                        ops = instr[eng]
+                        ops_str = str(ops)
+                        if len(ops_str) > col_widths[eng]:
+                            ops_str = ops_str[:col_widths[eng]-3] + "..."
+                        row += f" {ops_str:<{col_widths[eng]}}|"
+                    else:
+                        row += f" {'.':<{col_widths[eng]}}|"
+                f.write(row + "\n")
+
+            # Write overall summary at end
+            f.write("\n" + "=" * 80 + "\n")
+            f.write(f"OVERALL SUMMARY: {total_cycles} cycles\n")
+            f.write(f"Engine utilization:\n")
+            for eng in engines:
+                pct = (total_stats[eng] / total_cycles * 100) if total_cycles > 0 else 0
+                f.write(f"  {eng.upper():<6}: {total_stats[eng]:4d} cycles active ({pct:5.1f}%), {total_ops[eng]:5d} ops\n")
+
+        print(f"Instructions written to {os.getcwd()}/instructions.txt")
+
 BASELINE = 147734
 
 def do_kernel_test(
