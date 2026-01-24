@@ -58,6 +58,34 @@ class KernelBuilder:
     def add(self, engine, slot):
         self.instrs.append({engine: [slot]})
 
+    def add_bundle(self, *ops):
+        """
+        Add a VLIW instruction bundle with multiple operations in parallel.
+        Each op is (engine, slot) tuple.
+        Example: add_bundle(("alu", ("+", dst, a, b)), ("load", ("vload", dst, addr)))
+        """
+        bundle = {}
+        for engine, slot in ops:
+            if engine not in bundle:
+                bundle[engine] = []
+            bundle[engine].append(slot)
+        self.instrs.append(bundle)
+
+    def build_bundles(self, bundles):
+        """
+        Build instruction list from list of bundles.
+        Each bundle is a list of (engine, slot) tuples.
+        """
+        instrs = []
+        for bundle in bundles:
+            instr = {}
+            for engine, slot in bundle:
+                if engine not in instr:
+                    instr[engine] = []
+                instr[engine].append(slot)
+            instrs.append(instr)
+        return instrs
+
     def alloc_scratch(self, name=None, length=1):
         addr = self.scratch_ptr
         if name is not None:
@@ -106,16 +134,34 @@ class KernelBuilder:
 
         return slots
 
+    def build_hash_vec_packed(self, vval_addr, vtmp1, vtmp2, vconsts):
+        """
+        Vectorized hash with VLIW packing - two independent ops per cycle.
+        Returns list of bundles (each bundle is list of (engine, slot)).
+        """
+        bundles = []
+
+        for op1, val1, op2, op3, val3 in HASH_STAGES:
+            # PARALLEL: tmp1 and tmp2 calculations are independent (both read vval)
+            bundles.append([
+                ("valu", (op1, vtmp1, vval_addr, vconsts[val1])),
+                ("valu", (op3, vtmp2, vval_addr, vconsts[val3])),
+            ])
+            # val = tmp1 op2 tmp2 (depends on above)
+            bundles.append([("valu", (op2, vval_addr, vtmp1, vtmp2))])
+
+        return bundles
+
     def build_kernel(
         self, forest_height: int, n_nodes: int, batch_size: int, rounds: int
     ):
         """
-        Vectorized kernel - processes 8 batch items per iteration using SIMD.
+        Vectorized kernel with VLIW packing - processes 8 batch items per iteration.
         """
-        # Scalar temporaries
+        # Scalar temporaries - need two addr registers for parallel loads
         tmp1 = self.alloc_scratch("tmp1")
-        tmp2 = self.alloc_scratch("tmp2")
-        tmp_addr = self.alloc_scratch("tmp_addr")
+        tmp_addr1 = self.alloc_scratch("tmp_addr1")
+        tmp_addr2 = self.alloc_scratch("tmp_addr2")
 
         # Scratch space addresses for init vars
         init_vars = [
@@ -160,7 +206,7 @@ class KernelBuilder:
 
         # Hash constants - need vector versions
         hash_consts = set()
-        for op1, val1, op2, op3, val3 in HASH_STAGES:
+        for _, val1, _, _, val3 in HASH_STAGES:
             hash_consts.add(val1)
             hash_consts.add(val3)
 
@@ -174,59 +220,77 @@ class KernelBuilder:
         self.add("flow", ("pause",))
         self.add("debug", ("comment", "Starting loop"))
 
-        body = []
+        body = []  # Now a list of bundles, each bundle is a list of (engine, slot)
 
         # Process batch_size/VLEN groups of 8 elements
         n_vectors = batch_size // VLEN
         for round in range(rounds):
-            body.append(("debug", ("comment", f"===== ROUND {round} START =====")))
+            body.append([("debug", ("comment", f"===== ROUND {round} START ====="))])
             for vi in range(n_vectors):
                 base_i = vi * VLEN
-                body.append(("debug", ("comment", f"--- ROUND {round}, VECTOR {vi} (batch {base_i}-{base_i+7}) ---")))
+                body.append([("debug", ("comment", f"--- ROUND {round}, VECTOR {vi} (batch {base_i}-{base_i+7}) ---"))])
 
-                # Load 8 indices: vidx = mem[inp_indices_p + base_i : +8]
                 base_i_const = self.scratch_const(base_i)
-                body.append(("alu", ("+", tmp_addr, self.scratch["inp_indices_p"], base_i_const)))
-                body.append(("load", ("vload", vidx, tmp_addr)))
 
-                # Load 8 values: vval = mem[inp_values_p + base_i : +8]
-                body.append(("alu", ("+", tmp_addr, self.scratch["inp_values_p"], base_i_const)))
-                body.append(("load", ("vload", vval, tmp_addr)))
+                # PARALLEL: Compute both addresses in one cycle
+                body.append([
+                    ("alu", ("+", tmp_addr1, self.scratch["inp_indices_p"], base_i_const)),
+                    ("alu", ("+", tmp_addr2, self.scratch["inp_values_p"], base_i_const)),
+                ])
+
+                # PARALLEL: Load both vidx and vval in one cycle (2 LOAD slots)
+                body.append([
+                    ("load", ("vload", vidx, tmp_addr1)),
+                    ("load", ("vload", vval, tmp_addr2)),
+                ])
 
                 # Gather load: vnode_val[j] = mem[forest_values_p + vidx[j]] for j in 0..7
-                # No vgather instruction, so we do 8 scalar loads
-                for j in range(VLEN):
-                    body.append(("alu", ("+", tmp_addr, self.scratch["forest_values_p"], vidx + j)))
-                    body.append(("load", ("load", vnode_val + j, tmp_addr)))
+                # We have 2 LOAD slots and 12 ALU slots, so we can do 2 at a time
+                for j in range(0, VLEN, 2):
+                    body.append([
+                        ("alu", ("+", tmp_addr1, self.scratch["forest_values_p"], vidx + j)),
+                        ("alu", ("+", tmp_addr2, self.scratch["forest_values_p"], vidx + j + 1)),
+                    ])
+                    body.append([
+                        ("load", ("load", vnode_val + j, tmp_addr1)),
+                        ("load", ("load", vnode_val + j + 1, tmp_addr2)),
+                    ])
 
                 # vval = vval ^ vnode_val
-                body.append(("valu", ("^", vval, vval, vnode_val)))
+                body.append([("valu", ("^", vval, vval, vnode_val))])
 
-                # vval = hash(vval)
-                body.extend(self.build_hash_vec(vval, vtmp1, vtmp2, vconsts))
+                # vval = hash(vval) - pack the two independent ops per stage
+                body.extend(self.build_hash_vec_packed(vval, vtmp1, vtmp2, vconsts))
 
                 # vidx = 2*vidx + (1 if vval % 2 == 0 else 2)
-                body.append(("valu", ("%", vtmp1, vval, vtwo)))
-                body.append(("valu", ("==", vtmp1, vtmp1, vzero)))
-                body.append(("flow", ("vselect", vtmp3, vtmp1, vone, vtwo)))
-                body.append(("valu", ("*", vidx, vidx, vtwo)))
-                body.append(("valu", ("+", vidx, vidx, vtmp3)))
+                # PARALLEL: % and * are independent (both read from different sources)
+                body.append([
+                    ("valu", ("%", vtmp1, vval, vtwo)),
+                    ("valu", ("*", vidx, vidx, vtwo)),
+                ])
+                body.append([("valu", ("==", vtmp1, vtmp1, vzero))])
+                body.append([("flow", ("vselect", vtmp3, vtmp1, vone, vtwo))])
+                body.append([("valu", ("+", vidx, vidx, vtmp3))])
 
                 # vidx = 0 if vidx >= n_nodes else vidx
-                body.append(("valu", ("<", vtmp1, vidx, vn_nodes)))
-                body.append(("flow", ("vselect", vidx, vtmp1, vidx, vzero)))
+                body.append([("valu", ("<", vtmp1, vidx, vn_nodes))])
+                body.append([("flow", ("vselect", vidx, vtmp1, vidx, vzero))])
 
-                # Store 8 indices: mem[inp_indices_p + base_i : +8] = vidx
-                body.append(("alu", ("+", tmp_addr, self.scratch["inp_indices_p"], base_i_const)))
-                body.append(("store", ("vstore", tmp_addr, vidx)))
+                # PARALLEL: Compute both store addresses
+                body.append([
+                    ("alu", ("+", tmp_addr1, self.scratch["inp_indices_p"], base_i_const)),
+                    ("alu", ("+", tmp_addr2, self.scratch["inp_values_p"], base_i_const)),
+                ])
 
-                # Store 8 values: mem[inp_values_p + base_i : +8] = vval
-                body.append(("alu", ("+", tmp_addr, self.scratch["inp_values_p"], base_i_const)))
-                body.append(("store", ("vstore", tmp_addr, vval)))
+                # PARALLEL: Store both vidx and vval (2 STORE slots)
+                body.append([
+                    ("store", ("vstore", tmp_addr1, vidx)),
+                    ("store", ("vstore", tmp_addr2, vval)),
+                ])
 
-            body.append(("debug", ("comment", f"===== ROUND {round} END =====")))
+            body.append([("debug", ("comment", f"===== ROUND {round} END ====="))])
 
-        body_instrs = self.build(body)
+        body_instrs = self.build_bundles(body)
         self.instrs.extend(body_instrs)
         # Required to match with the yield in reference_kernel2
         self.instrs.append({"flow": [("pause",)]})
