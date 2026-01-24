@@ -1,0 +1,1 @@
+We will optimize this kernel together, here is the plan we will talk the ideas together and then talk about what to do and only then touch the code.
