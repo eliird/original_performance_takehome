@@ -132,7 +132,9 @@ class KernelBuilder:
         tmp_addr = self.alloc_scratch("tmp_addr")
 
         for round in range(rounds):
+            body.append(("debug", ("comment", f"===== ROUND {round} START =====")))
             for i in range(batch_size):
+                body.append(("debug", ("comment", f"--- ROUND {round}, BATCH {i} START ---")))
                 i_const = self.scratch_const(i)
                 # idx = mem[inp_indices_p + i]
                 body.append(("alu", ("+", tmp_addr, self.scratch["inp_indices_p"], i_const)))
@@ -167,6 +169,8 @@ class KernelBuilder:
                 # mem[inp_values_p + i] = val
                 body.append(("alu", ("+", tmp_addr, self.scratch["inp_values_p"], i_const)))
                 body.append(("store", ("store", tmp_addr, tmp_val)))
+                body.append(("debug", ("comment", f"--- ROUND {round}, BATCH {i} END ---")))
+            body.append(("debug", ("comment", f"===== ROUND {round} END =====")))
 
         body_instrs = self.build(body)
         self.instrs.extend(body_instrs)
@@ -194,19 +198,64 @@ class KernelBuilder:
             f.write(header + "\n")
             f.write("-" * len(header) + "\n")
 
-            # Track stats
+            # Track stats - overall
             total_cycles = 0
             total_stats = {eng: 0 for eng in engines}
             total_ops = {eng: 0 for eng in engines}
 
+            # Track stats - per round
+            round_cycles = 0
+            round_stats = {eng: 0 for eng in engines}
+            round_ops = {eng: 0 for eng in engines}
+
+            # Track stats - per batch
+            batch_cycles = 0
+            batch_stats = {eng: 0 for eng in engines}
+            batch_ops = {eng: 0 for eng in engines}
+
+            def write_summary(label, cycles, stats):
+                if cycles == 0:
+                    return
+                f.write(f"  {label}: {cycles} cycles | ")
+                parts = []
+                for eng in engines:
+                    if stats[eng] > 0:
+                        pct = (stats[eng] / cycles * 100)
+                        parts.append(f"{eng.upper()}:{stats[eng]}({pct:.0f}%)")
+                f.write(" ".join(parts) + "\n")
+
             # Each instruction is one cycle
             for cycle, instr in enumerate(self.instrs):
-                # Check for iteration markers in debug
-                if "debug" in instr and instr["debug"][0][0] == "comment" and "=====" in str(instr["debug"][0][1]):
-                    marker = instr["debug"][0][1]
-                    f.write(f"\n{marker}\n")
-                    f.write("-" * len(header) + "\n")
-                    continue
+                # Check for markers in debug
+                if "debug" in instr and instr["debug"][0][0] == "comment":
+                    marker = str(instr["debug"][0][1])
+
+                    # Round markers (=====)
+                    if "=====" in marker:
+                        if "END" in marker:
+                            f.write(f"\n{marker}\n")
+                            write_summary("ROUND SUMMARY", round_cycles, round_stats)
+                            f.write("-" * len(header) + "\n\n")
+                            # Reset round stats
+                            round_cycles = 0
+                            round_stats = {eng: 0 for eng in engines}
+                            round_ops = {eng: 0 for eng in engines}
+                        else:
+                            f.write(f"\n{marker}\n")
+                            f.write("-" * len(header) + "\n")
+                        continue
+
+                    # Batch markers (---)
+                    if "---" in marker:
+                        if "END" in marker:
+                            write_summary("BATCH", batch_cycles, batch_stats)
+                            # Reset batch stats
+                            batch_cycles = 0
+                            batch_stats = {eng: 0 for eng in engines}
+                            batch_ops = {eng: 0 for eng in engines}
+                        else:
+                            f.write(f"\n{marker}\n")
+                        continue
 
                 # Skip debug-only instructions
                 if list(instr.keys()) == ["debug"]:
@@ -214,12 +263,18 @@ class KernelBuilder:
 
                 # Count this as an actual execution cycle
                 total_cycles += 1
+                round_cycles += 1
+                batch_cycles += 1
 
                 # Count stats
                 for eng in engines:
                     if eng in instr:
                         total_stats[eng] += 1
                         total_ops[eng] += len(instr[eng])
+                        round_stats[eng] += 1
+                        round_ops[eng] += len(instr[eng])
+                        batch_stats[eng] += 1
+                        batch_ops[eng] += len(instr[eng])
 
                 row = f"{cycle:<5}|"
                 for eng in engines:
