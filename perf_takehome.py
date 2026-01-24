@@ -288,6 +288,8 @@ class KernelBuilder:
                     ("store", ("vstore", tmp_addr2, vval)),
                 ])
 
+                body.append([("debug", ("comment", f"--- ROUND {round}, VECTOR {vi} END ---"))])
+
             body.append([("debug", ("comment", f"===== ROUND {round} END ====="))])
 
         body_instrs = self.build_bundles(body)
