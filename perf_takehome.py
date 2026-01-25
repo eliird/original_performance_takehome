@@ -217,19 +217,24 @@ class KernelBuilder:
 
         return bundles
 
-    def emit_compute(self, buf, vtmp1_0, vtmp1_1, vtmp2_0, vtmp2_1, vtmp3_0, vtmp3_1, vzero, vone, vtwo, vn_nodes, vconsts):
+    def emit_xor(self, buf):
         """
-        Generate bundles for hash computation on 16 elements (2 vectors in parallel).
+        Generate XOR operation for a buffer: vval = vval ^ vnode_val.
+        Returns a single bundle with 2 VALU ops.
+        """
+        return [
+            ("valu", ("^", buf.vval0, buf.vval0, buf.vnode_val0)),
+            ("valu", ("^", buf.vval1, buf.vval1, buf.vnode_val1)),
+        ]
+
+    def emit_compute_no_xor(self, buf, vtmp1_0, vtmp1_1, vtmp2_0, vtmp2_1, vtmp3_0, vtmp3_1, vzero, vone, vtwo, vn_nodes, vconsts):
+        """
+        Generate bundles for hash computation WITHOUT the initial XOR.
+        The XOR should be done separately (pipelined into previous iteration's tail).
         Uses VALU and FLOW engines. Processes both vectors simultaneously using 4 VALU slots.
         Returns list of bundles.
         """
         bundles = []
-
-        # vval = vval ^ vnode_val (both vectors in parallel)
-        bundles.append([
-            ("valu", ("^", buf.vval0, buf.vval0, buf.vnode_val0)),
-            ("valu", ("^", buf.vval1, buf.vval1, buf.vnode_val1)),
-        ])
 
         # Hash computation for both vectors in parallel (4 VALU slots per cycle)
         for op1, val1, op2, op3, val3 in HASH_STAGES:
@@ -302,6 +307,38 @@ class KernelBuilder:
         bundles.append([
             ("store", ("vstore", tmp_addr1, buf.vidx1)),
             ("store", ("vstore", tmp_addr2, buf.vval1)),
+        ])
+
+        return bundles
+
+    def emit_store_with_xor(self, store_buf, xor_buf, base_i_const, base_i_plus_8_const, tmp_addr1, tmp_addr2):
+        """
+        Generate bundles to store 16 elements AND do XOR for next buffer in parallel.
+        Store uses STORE/ALU, XOR uses VALU - no conflicts.
+        Returns list of bundles.
+        """
+        bundles = []
+
+        # Store first vector + XOR for next buffer (VALU is free during store)
+        bundles.append([
+            ("alu", ("+", tmp_addr1, self.scratch["inp_indices_p"], base_i_const)),
+            ("alu", ("+", tmp_addr2, self.scratch["inp_values_p"], base_i_const)),
+            ("valu", ("^", xor_buf.vval0, xor_buf.vval0, xor_buf.vnode_val0)),
+            ("valu", ("^", xor_buf.vval1, xor_buf.vval1, xor_buf.vnode_val1)),
+        ])
+        bundles.append([
+            ("store", ("vstore", tmp_addr1, store_buf.vidx0)),
+            ("store", ("vstore", tmp_addr2, store_buf.vval0)),
+        ])
+
+        # Store second vector
+        bundles.append([
+            ("alu", ("+", tmp_addr1, self.scratch["inp_indices_p"], base_i_plus_8_const)),
+            ("alu", ("+", tmp_addr2, self.scratch["inp_values_p"], base_i_plus_8_const)),
+        ])
+        bundles.append([
+            ("store", ("vstore", tmp_addr1, store_buf.vidx1)),
+            ("store", ("vstore", tmp_addr2, store_buf.vval1)),
         ])
 
         return bundles
@@ -437,6 +474,8 @@ class KernelBuilder:
         base_i0_plus_8_const = self.scratch_const(base_i0 + 8)
         body.append([("debug", ("comment", f"--- PROLOGUE: Load iter 0 (round {r0}, batch {base_i0}-{base_i0+15}) START ---"))])
         body.extend(self.emit_load_data(active, base_i0_const, base_i0_plus_8_const, tmp_addr1, tmp_addr2))
+        # Do XOR for the first iteration after load completes
+        body.append(self.emit_xor(active))
         body.append([("debug", ("comment", f"--- PROLOGUE END ---"))])
 
         # MAIN LOOP: For iterations 0 to total_iters-2
@@ -452,8 +491,8 @@ class KernelBuilder:
 
             body.append([("debug", ("comment", f"--- ITER {iter_idx}: Compute (r{r},batch {base_i}-{base_i+15}) | Load (r{next_r},batch {next_base_i}-{next_base_i+15}) START ---"))])
 
-            # Generate compute ops for active buffer (16 elements)
-            compute_ops = self.emit_compute(active, vtmp1_0, vtmp1_1, vtmp2_0, vtmp2_1, vtmp3_0, vtmp3_1, vzero, vone, vtwo, vn_nodes, vconsts)
+            # Generate compute ops for active buffer (XOR already done, so use no_xor version)
+            compute_ops = self.emit_compute_no_xor(active, vtmp1_0, vtmp1_1, vtmp2_0, vtmp2_1, vtmp3_0, vtmp3_1, vzero, vone, vtwo, vn_nodes, vconsts)
 
             # Generate load ops for loading buffer (next iteration, 16 elements)
             load_ops = self.emit_load_data(loading, next_base_i_const, next_base_i_plus_8_const, tmp_addr1, tmp_addr2)
@@ -461,8 +500,8 @@ class KernelBuilder:
             # Merge them to run in parallel
             body.extend(self.merge_bundles(compute_ops, load_ops))
 
-            # Store results from active buffer (16 elements)
-            body.extend(self.emit_store_data(active, base_i_const, base_i_plus_8_const, tmp_addr1, tmp_addr2))
+            # Store results from active buffer + XOR for loading buffer (pipelined)
+            body.extend(self.emit_store_with_xor(active, loading, base_i_const, base_i_plus_8_const, tmp_addr1, tmp_addr2))
 
             body.append([("debug", ("comment", f"--- ITER {iter_idx} END ---"))])
 
@@ -474,7 +513,7 @@ class KernelBuilder:
         last_base_i_const = self.scratch_const(last_base_i)
         last_base_i_plus_8_const = self.scratch_const(last_base_i + 8)
         body.append([("debug", ("comment", f"--- EPILOGUE: Compute iter {total_iters-1} (round {last_r}, batch {last_base_i}-{last_base_i+15}) START ---"))])
-        body.extend(self.emit_compute(active, vtmp1_0, vtmp1_1, vtmp2_0, vtmp2_1, vtmp3_0, vtmp3_1, vzero, vone, vtwo, vn_nodes, vconsts))
+        body.extend(self.emit_compute_no_xor(active, vtmp1_0, vtmp1_1, vtmp2_0, vtmp2_1, vtmp3_0, vtmp3_1, vzero, vone, vtwo, vn_nodes, vconsts))
         body.extend(self.emit_store_data(active, last_base_i_const, last_base_i_plus_8_const, tmp_addr1, tmp_addr2))
         body.append([("debug", ("comment", f"--- EPILOGUE END ---"))])
 
