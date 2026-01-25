@@ -40,10 +40,13 @@ from problem import (
 
 @dataclass
 class MemBuffer:
-    """Double buffer for pipelining loads with computation."""
-    vidx: int      # scratch address for 8 indices
-    vval: int      # scratch address for 8 values
-    vnode_val: int # scratch address for 8 node values
+    """Double buffer for pipelining loads with computation. Holds 16 elements (2 vectors)."""
+    vidx0: int      # scratch address for first 8 indices
+    vidx1: int      # scratch address for second 8 indices
+    vval0: int      # scratch address for first 8 values
+    vval1: int      # scratch address for second 8 values
+    vnode_val0: int # scratch address for first 8 node values
+    vnode_val1: int # scratch address for second 8 node values
 
 
 class KernelBuilder:
@@ -161,86 +164,144 @@ class KernelBuilder:
 
         return bundles
 
-    def emit_load_data(self, buf, base_i_const, tmp_addr1, tmp_addr2):
+    def emit_load_data(self, buf, base_i_const, base_i_plus_8_const, tmp_addr1, tmp_addr2):
         """
-        Generate bundles to load data for one iteration into buffer.
+        Generate bundles to load 16 elements (2 vectors) for one iteration into buffer.
         Uses LOAD and ALU engines only.
         Returns list of bundles.
         """
         bundles = []
 
-        # Compute addresses for vidx and vval
+        # Load first vector (elements 0-7)
+        # Compute addresses for vidx0 and vval0
         bundles.append([
             ("alu", ("+", tmp_addr1, self.scratch["inp_indices_p"], base_i_const)),
             ("alu", ("+", tmp_addr2, self.scratch["inp_values_p"], base_i_const)),
         ])
-
-        # Load vidx and vval (2 LOAD slots)
         bundles.append([
-            ("load", ("vload", buf.vidx, tmp_addr1)),
-            ("load", ("vload", buf.vval, tmp_addr2)),
+            ("load", ("vload", buf.vidx0, tmp_addr1)),
+            ("load", ("vload", buf.vval0, tmp_addr2)),
         ])
 
-        # Gather load for vnode_val (2 at a time)
+        # Load second vector (elements 8-15)
+        bundles.append([
+            ("alu", ("+", tmp_addr1, self.scratch["inp_indices_p"], base_i_plus_8_const)),
+            ("alu", ("+", tmp_addr2, self.scratch["inp_values_p"], base_i_plus_8_const)),
+        ])
+        bundles.append([
+            ("load", ("vload", buf.vidx1, tmp_addr1)),
+            ("load", ("vload", buf.vval1, tmp_addr2)),
+        ])
+
+        # Gather load for vnode_val0 (first 8 elements, 2 at a time)
         for j in range(0, VLEN, 2):
             bundles.append([
-                ("alu", ("+", tmp_addr1, self.scratch["forest_values_p"], buf.vidx + j)),
-                ("alu", ("+", tmp_addr2, self.scratch["forest_values_p"], buf.vidx + j + 1)),
+                ("alu", ("+", tmp_addr1, self.scratch["forest_values_p"], buf.vidx0 + j)),
+                ("alu", ("+", tmp_addr2, self.scratch["forest_values_p"], buf.vidx0 + j + 1)),
             ])
             bundles.append([
-                ("load", ("load", buf.vnode_val + j, tmp_addr1)),
-                ("load", ("load", buf.vnode_val + j + 1, tmp_addr2)),
+                ("load", ("load", buf.vnode_val0 + j, tmp_addr1)),
+                ("load", ("load", buf.vnode_val0 + j + 1, tmp_addr2)),
+            ])
+
+        # Gather load for vnode_val1 (second 8 elements, 2 at a time)
+        for j in range(0, VLEN, 2):
+            bundles.append([
+                ("alu", ("+", tmp_addr1, self.scratch["forest_values_p"], buf.vidx1 + j)),
+                ("alu", ("+", tmp_addr2, self.scratch["forest_values_p"], buf.vidx1 + j + 1)),
+            ])
+            bundles.append([
+                ("load", ("load", buf.vnode_val1 + j, tmp_addr1)),
+                ("load", ("load", buf.vnode_val1 + j + 1, tmp_addr2)),
             ])
 
         return bundles
 
-    def emit_compute(self, buf, vtmp1, vtmp2, vtmp3, vzero, vone, vtwo, vn_nodes, vconsts):
+    def emit_compute(self, buf, vtmp1_0, vtmp1_1, vtmp2_0, vtmp2_1, vtmp3_0, vtmp3_1, vzero, vone, vtwo, vn_nodes, vconsts):
         """
-        Generate bundles for hash computation and index update.
-        Uses VALU and FLOW engines only.
+        Generate bundles for hash computation on 16 elements (2 vectors in parallel).
+        Uses VALU and FLOW engines. Processes both vectors simultaneously using 4 VALU slots.
         Returns list of bundles.
         """
         bundles = []
 
-        # vval = vval ^ vnode_val
-        bundles.append([("valu", ("^", buf.vval, buf.vval, buf.vnode_val))])
-
-        # Hash computation (uses VALU only)
-        bundles.extend(self.build_hash_vec_packed(buf.vval, vtmp1, vtmp2, vconsts))
-
-        # vidx = 2*vidx + (1 if vval % 2 == 0 else 2)
+        # vval = vval ^ vnode_val (both vectors in parallel)
         bundles.append([
-            ("valu", ("%", vtmp1, buf.vval, vtwo)),
-            ("valu", ("*", buf.vidx, buf.vidx, vtwo)),
+            ("valu", ("^", buf.vval0, buf.vval0, buf.vnode_val0)),
+            ("valu", ("^", buf.vval1, buf.vval1, buf.vnode_val1)),
         ])
-        bundles.append([("valu", ("==", vtmp1, vtmp1, vzero))])
-        bundles.append([("flow", ("vselect", vtmp3, vtmp1, vone, vtwo))])
-        bundles.append([("valu", ("+", buf.vidx, buf.vidx, vtmp3))])
 
-        # vidx = 0 if vidx >= n_nodes else vidx
-        bundles.append([("valu", ("<", vtmp1, buf.vidx, vn_nodes))])
-        bundles.append([("flow", ("vselect", buf.vidx, vtmp1, buf.vidx, vzero))])
+        # Hash computation for both vectors in parallel (4 VALU slots per cycle)
+        for op1, val1, op2, op3, val3 in HASH_STAGES:
+            # Both vectors: tmp1 and tmp2 calculations
+            bundles.append([
+                ("valu", (op1, vtmp1_0, buf.vval0, vconsts[val1])),
+                ("valu", (op3, vtmp2_0, buf.vval0, vconsts[val3])),
+                ("valu", (op1, vtmp1_1, buf.vval1, vconsts[val1])),
+                ("valu", (op3, vtmp2_1, buf.vval1, vconsts[val3])),
+            ])
+            # Both vectors: combine tmp1 and tmp2
+            bundles.append([
+                ("valu", (op2, buf.vval0, vtmp1_0, vtmp2_0)),
+                ("valu", (op2, buf.vval1, vtmp1_1, vtmp2_1)),
+            ])
+
+        # vidx = 2*vidx + (1 if vval % 2 == 0 else 2) - both vectors
+        bundles.append([
+            ("valu", ("%", vtmp1_0, buf.vval0, vtwo)),
+            ("valu", ("*", buf.vidx0, buf.vidx0, vtwo)),
+            ("valu", ("%", vtmp1_1, buf.vval1, vtwo)),
+            ("valu", ("*", buf.vidx1, buf.vidx1, vtwo)),
+        ])
+        bundles.append([
+            ("valu", ("==", vtmp1_0, vtmp1_0, vzero)),
+            ("valu", ("==", vtmp1_1, vtmp1_1, vzero)),
+        ])
+        # Only 1 FLOW slot per cycle, so do vselects separately
+        bundles.append([("flow", ("vselect", vtmp3_0, vtmp1_0, vone, vtwo))])
+        bundles.append([("flow", ("vselect", vtmp3_1, vtmp1_1, vone, vtwo))])
+        bundles.append([
+            ("valu", ("+", buf.vidx0, buf.vidx0, vtmp3_0)),
+            ("valu", ("+", buf.vidx1, buf.vidx1, vtmp3_1)),
+        ])
+
+        # vidx = 0 if vidx >= n_nodes else vidx - both vectors
+        bundles.append([
+            ("valu", ("<", vtmp1_0, buf.vidx0, vn_nodes)),
+            ("valu", ("<", vtmp1_1, buf.vidx1, vn_nodes)),
+        ])
+        # Only 1 FLOW slot per cycle
+        bundles.append([("flow", ("vselect", buf.vidx0, vtmp1_0, buf.vidx0, vzero))])
+        bundles.append([("flow", ("vselect", buf.vidx1, vtmp1_1, buf.vidx1, vzero))])
 
         return bundles
 
-    def emit_store_data(self, buf, base_i_const, tmp_addr1, tmp_addr2):
+    def emit_store_data(self, buf, base_i_const, base_i_plus_8_const, tmp_addr1, tmp_addr2):
         """
-        Generate bundles to store results.
+        Generate bundles to store 16 elements (2 vectors).
         Uses STORE and ALU engines only.
         Returns list of bundles.
         """
         bundles = []
 
-        # Compute store addresses
+        # Store first vector (elements 0-7)
         bundles.append([
             ("alu", ("+", tmp_addr1, self.scratch["inp_indices_p"], base_i_const)),
             ("alu", ("+", tmp_addr2, self.scratch["inp_values_p"], base_i_const)),
         ])
-
-        # Store vidx and vval
         bundles.append([
-            ("store", ("vstore", tmp_addr1, buf.vidx)),
-            ("store", ("vstore", tmp_addr2, buf.vval)),
+            ("store", ("vstore", tmp_addr1, buf.vidx0)),
+            ("store", ("vstore", tmp_addr2, buf.vval0)),
+        ])
+
+        # Store second vector (elements 8-15)
+        bundles.append([
+            ("alu", ("+", tmp_addr1, self.scratch["inp_indices_p"], base_i_plus_8_const)),
+            ("alu", ("+", tmp_addr2, self.scratch["inp_values_p"], base_i_plus_8_const)),
+        ])
+        bundles.append([
+            ("store", ("vstore", tmp_addr1, buf.vidx1)),
+            ("store", ("vstore", tmp_addr2, buf.vval1)),
         ])
 
         return bundles
@@ -268,6 +329,7 @@ class KernelBuilder:
     ):
         """
         Vectorized kernel with VLIW packing and double buffering.
+        Processes 16 elements per iteration (2 vectors).
         Overlaps loading next iteration's data with current iteration's computation.
         """
         # Scalar temporaries
@@ -295,23 +357,33 @@ class KernelBuilder:
         zero_const = self.scratch_const(0)
         one_const = self.scratch_const(1)
         two_const = self.scratch_const(2)
+        eight_const = self.scratch_const(8)
 
-        # Double buffer: two sets of vector registers
+        # Double buffer: two sets of 16-element buffers (2 vectors each)
         bufA = MemBuffer(
-            vidx=self.alloc_scratch("vidx_A", VLEN),
-            vval=self.alloc_scratch("vval_A", VLEN),
-            vnode_val=self.alloc_scratch("vnode_val_A", VLEN),
+            vidx0=self.alloc_scratch("vidx_A0", VLEN),
+            vidx1=self.alloc_scratch("vidx_A1", VLEN),
+            vval0=self.alloc_scratch("vval_A0", VLEN),
+            vval1=self.alloc_scratch("vval_A1", VLEN),
+            vnode_val0=self.alloc_scratch("vnode_val_A0", VLEN),
+            vnode_val1=self.alloc_scratch("vnode_val_A1", VLEN),
         )
         bufB = MemBuffer(
-            vidx=self.alloc_scratch("vidx_B", VLEN),
-            vval=self.alloc_scratch("vval_B", VLEN),
-            vnode_val=self.alloc_scratch("vnode_val_B", VLEN),
+            vidx0=self.alloc_scratch("vidx_B0", VLEN),
+            vidx1=self.alloc_scratch("vidx_B1", VLEN),
+            vval0=self.alloc_scratch("vval_B0", VLEN),
+            vval1=self.alloc_scratch("vval_B1", VLEN),
+            vnode_val0=self.alloc_scratch("vnode_val_B0", VLEN),
+            vnode_val1=self.alloc_scratch("vnode_val_B1", VLEN),
         )
 
-        # Vector temporaries (shared)
-        vtmp1 = self.alloc_scratch("vtmp1", VLEN)
-        vtmp2 = self.alloc_scratch("vtmp2", VLEN)
-        vtmp3 = self.alloc_scratch("vtmp3", VLEN)
+        # Vector temporaries - need 2 sets for processing 2 vectors in parallel
+        vtmp1_0 = self.alloc_scratch("vtmp1_0", VLEN)
+        vtmp1_1 = self.alloc_scratch("vtmp1_1", VLEN)
+        vtmp2_0 = self.alloc_scratch("vtmp2_0", VLEN)
+        vtmp2_1 = self.alloc_scratch("vtmp2_1", VLEN)
+        vtmp3_0 = self.alloc_scratch("vtmp3_0", VLEN)
+        vtmp3_1 = self.alloc_scratch("vtmp3_1", VLEN)
 
         # Vector constants
         vzero = self.alloc_scratch("vzero", VLEN)
@@ -343,26 +415,28 @@ class KernelBuilder:
 
         body = []
 
-        # Total iterations across all rounds
-        n_vectors = batch_size // VLEN
-        total_iters = rounds * n_vectors
+        # Each iteration processes 16 elements (2 vectors)
+        elements_per_iter = 16
+        n_iters_per_round = batch_size // elements_per_iter  # 256/16 = 16 iterations per round
+        total_iters = rounds * n_iters_per_round
 
         def get_iter_info(iter_idx):
-            """Get round, vector index, and base_i for a given iteration."""
-            r = iter_idx // n_vectors
-            vi = iter_idx % n_vectors
-            base_i = vi * VLEN
+            """Get round, iteration within round, and base_i for a given iteration."""
+            r = iter_idx // n_iters_per_round
+            vi = iter_idx % n_iters_per_round
+            base_i = vi * elements_per_iter
             return r, vi, base_i
 
         # Start with bufA as active (for compute), bufB as loading
         active = bufA
         loading = bufB
 
-        # PROLOGUE: Load first iteration into active buffer
+        # PROLOGUE: Load first iteration (16 elements) into active buffer
         r0, vi0, base_i0 = get_iter_info(0)
         base_i0_const = self.scratch_const(base_i0)
-        body.append([("debug", ("comment", f"--- PROLOGUE: Load iter 0 (round {r0}, vec {vi0}) START ---"))])
-        body.extend(self.emit_load_data(active, base_i0_const, tmp_addr1, tmp_addr2))
+        base_i0_plus_8_const = self.scratch_const(base_i0 + 8)
+        body.append([("debug", ("comment", f"--- PROLOGUE: Load iter 0 (round {r0}, batch {base_i0}-{base_i0+15}) START ---"))])
+        body.extend(self.emit_load_data(active, base_i0_const, base_i0_plus_8_const, tmp_addr1, tmp_addr2))
         body.append([("debug", ("comment", f"--- PROLOGUE END ---"))])
 
         # MAIN LOOP: For iterations 0 to total_iters-2
@@ -372,21 +446,23 @@ class KernelBuilder:
             next_r, next_vi, next_base_i = get_iter_info(iter_idx + 1)
 
             base_i_const = self.scratch_const(base_i)
+            base_i_plus_8_const = self.scratch_const(base_i + 8)
             next_base_i_const = self.scratch_const(next_base_i)
+            next_base_i_plus_8_const = self.scratch_const(next_base_i + 8)
 
-            body.append([("debug", ("comment", f"--- ITER {iter_idx}: Compute (r{r},v{vi}) | Load (r{next_r},v{next_vi}) START ---"))])
+            body.append([("debug", ("comment", f"--- ITER {iter_idx}: Compute (r{r},batch {base_i}-{base_i+15}) | Load (r{next_r},batch {next_base_i}-{next_base_i+15}) START ---"))])
 
-            # Generate compute ops for active buffer
-            compute_ops = self.emit_compute(active, vtmp1, vtmp2, vtmp3, vzero, vone, vtwo, vn_nodes, vconsts)
+            # Generate compute ops for active buffer (16 elements)
+            compute_ops = self.emit_compute(active, vtmp1_0, vtmp1_1, vtmp2_0, vtmp2_1, vtmp3_0, vtmp3_1, vzero, vone, vtwo, vn_nodes, vconsts)
 
-            # Generate load ops for loading buffer (next iteration)
-            load_ops = self.emit_load_data(loading, next_base_i_const, tmp_addr1, tmp_addr2)
+            # Generate load ops for loading buffer (next iteration, 16 elements)
+            load_ops = self.emit_load_data(loading, next_base_i_const, next_base_i_plus_8_const, tmp_addr1, tmp_addr2)
 
             # Merge them to run in parallel
             body.extend(self.merge_bundles(compute_ops, load_ops))
 
-            # Store results from active buffer
-            body.extend(self.emit_store_data(active, base_i_const, tmp_addr1, tmp_addr2))
+            # Store results from active buffer (16 elements)
+            body.extend(self.emit_store_data(active, base_i_const, base_i_plus_8_const, tmp_addr1, tmp_addr2))
 
             body.append([("debug", ("comment", f"--- ITER {iter_idx} END ---"))])
 
@@ -396,9 +472,10 @@ class KernelBuilder:
         # EPILOGUE: Compute last iteration (no more loading needed)
         last_r, last_vi, last_base_i = get_iter_info(total_iters - 1)
         last_base_i_const = self.scratch_const(last_base_i)
-        body.append([("debug", ("comment", f"--- EPILOGUE: Compute iter {total_iters-1} (round {last_r}, vec {last_vi}) START ---"))])
-        body.extend(self.emit_compute(active, vtmp1, vtmp2, vtmp3, vzero, vone, vtmp1, vn_nodes, vconsts))
-        body.extend(self.emit_store_data(active, last_base_i_const, tmp_addr1, tmp_addr2))
+        last_base_i_plus_8_const = self.scratch_const(last_base_i + 8)
+        body.append([("debug", ("comment", f"--- EPILOGUE: Compute iter {total_iters-1} (round {last_r}, batch {last_base_i}-{last_base_i+15}) START ---"))])
+        body.extend(self.emit_compute(active, vtmp1_0, vtmp1_1, vtmp2_0, vtmp2_1, vtmp3_0, vtmp3_1, vzero, vone, vtwo, vn_nodes, vconsts))
+        body.extend(self.emit_store_data(active, last_base_i_const, last_base_i_plus_8_const, tmp_addr1, tmp_addr2))
         body.append([("debug", ("comment", f"--- EPILOGUE END ---"))])
 
         body_instrs = self.build_bundles(body)
