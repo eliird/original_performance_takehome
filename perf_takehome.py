@@ -133,6 +133,58 @@ class KernelBuilder:
 
         return slots
 
+    def build_hash_vec_parallel(self, v_val, v_tmp1, v_tmp2, hash_const_vecs, n_active, round, base_i):
+        """
+        Vector hash computation for n_active parallel vectors.
+        Processes all vectors through each hash stage using VALU parallelism.
+
+        Args:
+            v_val: list of vector value addresses (will be modified in place)
+            v_tmp1: list of vector temp1 addresses
+            v_tmp2: list of vector temp2 addresses
+            hash_const_vecs: list of (val1_vec, val3_vec) tuples for hash constants
+            n_active: number of active parallel streams
+            round: current round (for debug)
+            base_i: base index for this batch (for debug)
+        """
+        slots = []
+
+        for hi, (op1, val1, op2, op3, val3) in enumerate(HASH_STAGES):
+            val1_vec, val3_vec = hash_const_vecs[hi]
+            val1_const = self.scratch_const(val1)
+            val3_const = self.scratch_const(val3)
+
+            # Broadcast constants (only need to do once per stage)
+            slots.append({
+                "valu": [
+                    ("vbroadcast", val1_vec, val1_const),
+                    ("vbroadcast", val3_vec, val3_const),
+                ]
+            })
+
+            # tmp1[p] = op1(v_val[p], val1_vec) for all active p
+            slots.append({
+                "valu": [(op1, v_tmp1[p], v_val[p], val1_vec) for p in range(n_active)]
+            })
+
+            # tmp2[p] = op3(v_val[p], val3_vec) for all active p
+            slots.append({
+                "valu": [(op3, v_tmp2[p], v_val[p], val3_vec) for p in range(n_active)]
+            })
+
+            # v_val[p] = op2(tmp1[p], tmp2[p]) for all active p
+            slots.append({
+                "valu": [(op2, v_val[p], v_tmp1[p], v_tmp2[p]) for p in range(n_active)]
+            })
+
+            # Debug compare
+            for p in range(n_active):
+                offset = base_i + p * VLEN
+                slots.append(("debug", ("vcompare", v_val[p],
+                    tuple((round, offset + vi, "hash_stage", hi) for vi in range(VLEN)))))
+
+        return slots
+
     def build_kernel(
         self, forest_height: int, n_nodes: int, batch_size: int, rounds: int
     ):
@@ -275,39 +327,9 @@ class KernelBuilder:
                 })
 
                 # Hash computation - process all n_active vectors through each hash stage
-                for hi, (op1, val1, op2, op3, val3) in enumerate(HASH_STAGES):
-                    val1_vec, val3_vec = hash_const_vecs[hi]
-                    val1_const = self.scratch_const(val1)
-                    val3_const = self.scratch_const(val3)
-
-                    # Broadcast constants (only need to do once per stage)
-                    body.append({
-                        "valu": [
-                            ("vbroadcast", val1_vec, val1_const),
-                            ("vbroadcast", val3_vec, val3_const),
-                        ]
-                    })
-
-                    # tmp1[p] = op1(v_val[p], val1_vec) for all active p
-                    body.append({
-                        "valu": [(op1, v_tmp1[p], v_val[p], val1_vec) for p in range(n_active)]
-                    })
-
-                    # tmp2[p] = op3(v_val[p], val3_vec) for all active p
-                    body.append({
-                        "valu": [(op3, v_tmp2[p], v_val[p], val3_vec) for p in range(n_active)]
-                    })
-
-                    # v_val[p] = op2(tmp1[p], tmp2[p]) for all active p
-                    body.append({
-                        "valu": [(op2, v_val[p], v_tmp1[p], v_tmp2[p]) for p in range(n_active)]
-                    })
-
-                    # Debug compare
-                    for p in range(n_active):
-                        offset = base_i + p * VLEN
-                        body.append(("debug", ("vcompare", v_val[p],
-                            tuple((round, offset + vi, "hash_stage", hi) for vi in range(VLEN)))))
+                body.extend(self.build_hash_vec_parallel(
+                    v_val, v_tmp1, v_tmp2, hash_const_vecs, n_active, round, base_i
+                ))
 
                 # Debug compare for hashed_val
                 for p in range(n_active):
