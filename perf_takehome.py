@@ -264,6 +264,10 @@ class KernelBuilder:
         stride = N_PARALLEL * VLEN
         assert batch_size % VLEN == 0, f"batch_size must be divisible by VLEN ({VLEN})"
 
+        # Initialize instruction dumper for analysis
+        from dump_instructions import InstructionDumper
+        dumper = InstructionDumper("instructions.txt")
+
         pending_stores = None
         use_set = 0
 
@@ -272,6 +276,7 @@ class KernelBuilder:
                 remaining = batch_size - base_i
                 n_active = min(N_PARALLEL, (remaining + VLEN - 1) // VLEN)
                 cur_idx_addrs, cur_val_addrs = idx_addrs[use_set], val_addrs[use_set]
+                iter_body = []  # Track instructions for this iteration
 
                 # Compute base addresses
                 alu_slots = []
@@ -279,7 +284,7 @@ class KernelBuilder:
                     offset_const = self.scratch_const(base_i + p * VLEN)
                     alu_slots.append(("+", cur_idx_addrs[p], self.scratch["inp_indices_p"], offset_const))
                     alu_slots.append(("+", cur_val_addrs[p], self.scratch["inp_values_p"], offset_const))
-                body.append({"alu": alu_slots})
+                iter_body.append({"alu": alu_slots})
 
                 # Load current + store previous (software pipelining)
                 for p in range(n_active):
@@ -287,36 +292,48 @@ class KernelBuilder:
                     if pending_stores and p < pending_stores[0]:
                         prev_n, prev_idx, prev_val, pv_idx, pv_val = pending_stores
                         bundle["store"] = [("vstore", prev_idx[p], pv_idx[p]), ("vstore", prev_val[p], pv_val[p])]
-                    body.append(bundle)
+                    iter_body.append(bundle)
 
                 # Finish remaining pending stores
                 if pending_stores:
                     prev_n, prev_idx, prev_val, pv_idx, pv_val = pending_stores
                     for p in range(n_active, prev_n):
-                        body.append({"store": [("vstore", prev_idx[p], pv_idx[p]), ("vstore", prev_val[p], pv_val[p])]})
+                        iter_body.append({"store": [("vstore", prev_idx[p], pv_idx[p]), ("vstore", prev_val[p], pv_val[p])]})
                     pending_stores = None
 
                 # Gather node values
-                body.extend(self.build_gather(v_idx, v_node_val, tmp_addrs, n_active))
+                iter_body.extend(self.build_gather(v_idx, v_node_val, tmp_addrs, n_active))
 
                 # XOR with node values
-                body.append({"valu": [("^", v_val[p], v_val[p], v_node_val[p]) for p in range(n_active)]})
+                iter_body.append({"valu": [("^", v_val[p], v_val[p], v_node_val[p]) for p in range(n_active)]})
 
                 # Hash computation
-                body.extend(self.build_hash_vec_parallel(v_val, v_tmp1, hash_vecs, n_active))
+                iter_body.extend(self.build_hash_vec_parallel(v_val, v_tmp1, hash_vecs, n_active))
 
                 # Update indices
-                body.extend(self.build_index_update(v_idx, v_val, v_tmp1, v_zero, v_two, v_n_nodes, n_active))
+                iter_body.extend(self.build_index_update(v_idx, v_val, v_tmp1, v_zero, v_two, v_n_nodes, n_active))
 
                 # Queue stores for next iteration
                 pending_stores = (n_active, cur_idx_addrs, cur_val_addrs, v_idx, v_val)
                 use_set = 1 - use_set
 
+                # Add to body and dump
+                body.extend(iter_body)
+                dumper.add_instructions(iter_body)
+                dumper.end_iteration(base_i)
+
+            dumper.end_round()
+
         # Flush final stores
         if pending_stores:
             prev_n, prev_idx, prev_val, pv_idx, pv_val = pending_stores
+            flush_body = []
             for p in range(prev_n):
-                body.append({"store": [("vstore", prev_idx[p], pv_idx[p]), ("vstore", prev_val[p], pv_val[p])]})
+                flush_body.append({"store": [("vstore", prev_idx[p], pv_idx[p]), ("vstore", prev_val[p], pv_val[p])]})
+            body.extend(flush_body)
+            dumper.add_instructions(flush_body)
+
+        dumper.finalize()
 
         self.instrs.extend(self.build(body))
         self.instrs.append({"flow": [("pause",)]})
