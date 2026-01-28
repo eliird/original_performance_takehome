@@ -217,9 +217,9 @@ class KernelBuilder:
         self.add("flow", ("pause",))
         self.add("debug", ("comment", "Starting loop"))
 
-        # === Allocate vector registers ===
-        v_idx = [self.alloc_scratch(f"v_idx_{p}", VLEN) for p in range(N_PARALLEL)]
-        v_val = [self.alloc_scratch(f"v_val_{p}", VLEN) for p in range(N_PARALLEL)]
+        # === Allocate vector registers (double-buffered for load/compute overlap) ===
+        v_idx = [[self.alloc_scratch(f"v_idx_{s}_{p}", VLEN) for p in range(N_PARALLEL)] for s in range(2)]
+        v_val = [[self.alloc_scratch(f"v_val_{s}_{p}", VLEN) for p in range(N_PARALLEL)] for s in range(2)]
         v_node_val = [self.alloc_scratch(f"v_node_val_{p}", VLEN) for p in range(N_PARALLEL)]
         v_tmp1 = [self.alloc_scratch(f"v_tmp1_{p}", VLEN) for p in range(N_PARALLEL)]
 
@@ -268,17 +268,27 @@ class KernelBuilder:
         from dump_instructions import InstructionDumper
         dumper = InstructionDumper("instructions.txt")
 
-        pending_stores = None
-        use_set = 0
-
+        # Build list of all iterations
+        iterations = []
         for rnd in range(rounds):
             for base_i in range(0, batch_size, stride):
                 remaining = batch_size - base_i
                 n_active = min(N_PARALLEL, (remaining + VLEN - 1) // VLEN)
-                cur_idx_addrs, cur_val_addrs = idx_addrs[use_set], val_addrs[use_set]
-                iter_body = []  # Track instructions for this iteration
+                iterations.append((rnd, base_i, n_active))
 
-                # Compute base addresses
+        pending_stores = None
+        use_set = 0
+        data_prefetched = False  # Track if current iteration's data was already loaded
+
+        for iter_idx, (rnd, base_i, n_active) in enumerate(iterations):
+            cur_v_idx, cur_v_val = v_idx[use_set], v_val[use_set]
+            cur_idx_addrs, cur_val_addrs = idx_addrs[use_set], val_addrs[use_set]
+            next_set = 1 - use_set
+            iter_body = []
+
+            if not data_prefetched:
+                # First iteration or data wasn't prefetched - need to load
+                # Compute base addresses for current iteration
                 alu_slots = []
                 for p in range(n_active):
                     offset_const = self.scratch_const(base_i + p * VLEN)
@@ -288,48 +298,104 @@ class KernelBuilder:
 
                 # Load current + store previous (software pipelining)
                 for p in range(n_active):
-                    bundle = {"load": [("vload", v_idx[p], cur_idx_addrs[p]), ("vload", v_val[p], cur_val_addrs[p])]}
+                    bundle = {"load": [("vload", cur_v_idx[p], cur_idx_addrs[p]),
+                                       ("vload", cur_v_val[p], cur_val_addrs[p])]}
                     if pending_stores and p < pending_stores[0]:
-                        prev_n, prev_idx, prev_val, pv_idx, pv_val = pending_stores
-                        bundle["store"] = [("vstore", prev_idx[p], pv_idx[p]), ("vstore", prev_val[p], pv_val[p])]
+                        prev_n, prev_idx_addrs, prev_val_addrs, pv_idx, pv_val = pending_stores
+                        bundle["store"] = [("vstore", prev_idx_addrs[p], pv_idx[p]),
+                                           ("vstore", prev_val_addrs[p], pv_val[p])]
                     iter_body.append(bundle)
 
                 # Finish remaining pending stores
                 if pending_stores:
-                    prev_n, prev_idx, prev_val, pv_idx, pv_val = pending_stores
+                    prev_n, prev_idx_addrs, prev_val_addrs, pv_idx, pv_val = pending_stores
                     for p in range(n_active, prev_n):
-                        iter_body.append({"store": [("vstore", prev_idx[p], pv_idx[p]), ("vstore", prev_val[p], pv_val[p])]})
+                        iter_body.append({"store": [("vstore", prev_idx_addrs[p], pv_idx[p]),
+                                                    ("vstore", prev_val_addrs[p], pv_val[p])]})
+                    pending_stores = None
+            else:
+                # Data was prefetched - just do stores from previous iteration
+                if pending_stores:
+                    prev_n, prev_idx_addrs, prev_val_addrs, pv_idx, pv_val = pending_stores
+                    for p in range(prev_n):
+                        iter_body.append({"store": [("vstore", prev_idx_addrs[p], pv_idx[p]),
+                                                    ("vstore", prev_val_addrs[p], pv_val[p])]})
                     pending_stores = None
 
-                # Gather node values
-                iter_body.extend(self.build_gather(v_idx, v_node_val, tmp_addrs, n_active))
+            # Gather node values
+            iter_body.extend(self.build_gather(cur_v_idx, v_node_val, tmp_addrs, n_active))
 
-                # XOR with node values
-                iter_body.append({"valu": [("^", v_val[p], v_val[p], v_node_val[p]) for p in range(n_active)]})
+            # Check if there's a next iteration to prefetch
+            has_next = iter_idx + 1 < len(iterations)
+            if has_next:
+                next_rnd, next_base_i, next_n_active = iterations[iter_idx + 1]
+                next_v_idx, next_v_val = v_idx[next_set], v_val[next_set]
+                next_idx_addrs, next_val_addrs = idx_addrs[next_set], val_addrs[next_set]
 
-                # Hash computation
-                iter_body.extend(self.build_hash_vec_parallel(v_val, v_tmp1, hash_vecs, n_active))
+                # Compute next iteration's base addresses
+                next_alu_slots = []
+                for p in range(next_n_active):
+                    offset_const = self.scratch_const(next_base_i + p * VLEN)
+                    next_alu_slots.append(("+", next_idx_addrs[p], self.scratch["inp_indices_p"], offset_const))
+                    next_alu_slots.append(("+", next_val_addrs[p], self.scratch["inp_values_p"], offset_const))
 
-                # Update indices
-                iter_body.extend(self.build_index_update(v_idx, v_val, v_tmp1, v_zero, v_two, v_n_nodes, n_active))
+            # XOR with node values + compute next addresses
+            xor_bundle = {"valu": [("^", cur_v_val[p], cur_v_val[p], v_node_val[p]) for p in range(n_active)]}
+            if has_next:
+                xor_bundle["alu"] = next_alu_slots
+            iter_body.append(xor_bundle)
 
-                # Queue stores for next iteration
-                pending_stores = (n_active, cur_idx_addrs, cur_val_addrs, v_idx, v_val)
-                use_set = 1 - use_set
+            # Hash computation - interleave with next iteration's vloads
+            hash_slots = self.build_hash_vec_parallel(cur_v_val, v_tmp1, hash_vecs, n_active)
 
-                # Add to body and dump
-                body.extend(iter_body)
-                dumper.add_instructions(iter_body)
-                dumper.end_iteration(base_i)
+            if has_next:
+                # Merge vloads into hash slots (valu and load can run in parallel)
+                load_idx = 0
+                for slot in hash_slots:
+                    if load_idx < next_n_active and isinstance(slot, dict) and "valu" in slot:
+                        new_slot = dict(slot)
+                        new_slot["load"] = [("vload", next_v_idx[load_idx], next_idx_addrs[load_idx]),
+                                            ("vload", next_v_val[load_idx], next_val_addrs[load_idx])]
+                        load_idx += 1
+                        iter_body.append(new_slot)
+                    else:
+                        iter_body.append(slot)
+                # Finish any remaining loads
+                for p in range(load_idx, next_n_active):
+                    iter_body.append({"load": [("vload", next_v_idx[p], next_idx_addrs[p]),
+                                               ("vload", next_v_val[p], next_val_addrs[p])]})
+                data_prefetched = True  # Next iteration's data is now loaded
+            else:
+                iter_body.extend(hash_slots)
+                data_prefetched = False  # No prefetch happened
 
+            # Update indices
+            iter_body.extend(self.build_index_update(cur_v_idx, cur_v_val, v_tmp1, v_zero, v_two, v_n_nodes, n_active))
+
+            # Queue stores for next cycle
+            pending_stores = (n_active, cur_idx_addrs, cur_val_addrs, cur_v_idx, cur_v_val)
+            use_set = next_set
+
+            # Add to body and dump
+            body.extend(iter_body)
+            dumper.add_instructions(iter_body)
+            dumper.end_iteration(base_i)
+
+            # End round tracking
+            if iter_idx + 1 < len(iterations) and iterations[iter_idx + 1][0] != rnd:
+                dumper.end_round()
+
+        # End final round
+        if iterations:
             dumper.end_round()
 
         # Flush final stores
         if pending_stores:
-            prev_n, prev_idx, prev_val, pv_idx, pv_val = pending_stores
+            prev_n, prev_idx_addrs, prev_val_addrs, pv_idx, pv_val = pending_stores
             flush_body = []
             for p in range(prev_n):
-                flush_body.append({"store": [("vstore", prev_idx[p], pv_idx[p]), ("vstore", prev_val[p], pv_val[p])]})
+                flush_body.append({"store": [("vstore", prev_idx_addrs[p], pv_idx[p]),
+                                             ("vstore", prev_val_addrs[p], pv_val[p])]})
             body.extend(flush_body)
             dumper.add_instructions(flush_body)
 
