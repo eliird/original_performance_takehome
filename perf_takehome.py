@@ -49,10 +49,40 @@ class KernelBuilder:
         return DebugInfo(scratch_map=self.scratch_debug)
 
     def build(self, slots: list[tuple[Engine, tuple]], vliw: bool = False):
-        # Simple slot packing that just uses one slot per instruction bundle
+        if not vliw:
+            # Simple slot packing that just uses one slot per instruction bundle
+            instrs = []
+            for engine, slot in slots:
+                instrs.append({engine: [slot]})
+            return instrs
+
+        # VLIW mode: pack multiple slots into instruction bundles respecting slot limits
         instrs = []
+        current_bundle = {}
+        current_counts = {engine: 0 for engine in SLOT_LIMITS}
+
         for engine, slot in slots:
-            instrs.append({engine: [slot]})
+            limit = SLOT_LIMITS.get(engine, 1)
+
+            # Check if we can add this slot to the current bundle
+            if current_counts[engine] < limit:
+                # Add to current bundle
+                if engine not in current_bundle:
+                    current_bundle[engine] = []
+                current_bundle[engine].append(slot)
+                current_counts[engine] += 1
+            else:
+                # Current bundle is full for this engine, start a new bundle
+                if current_bundle:
+                    instrs.append(current_bundle)
+                current_bundle = {engine: [slot]}
+                current_counts = {e: 0 for e in SLOT_LIMITS}
+                current_counts[engine] = 1
+
+        # Don't forget the last bundle
+        if current_bundle:
+            instrs.append(current_bundle)
+
         return instrs
 
     def add(self, engine, slot):
@@ -107,6 +137,7 @@ class KernelBuilder:
         ]
         for v in init_vars:
             self.alloc_scratch(v, 1)
+        
         for i, v in enumerate(init_vars):
             self.add("load", ("const", tmp1, i))
             self.add("load", ("load", self.scratch[v], tmp1))
