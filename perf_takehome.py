@@ -158,11 +158,14 @@ class KernelBuilder:
                 slots.append({"valu": [(op2, v_val[p], v_tmp1[p], v_val[p]) for p in range(n_active)]})
         return slots
 
-    def build_gather(self, v_idx, v_node_val, tmp_addrs, n_active, pending_stores=None):
+    def build_gather(self, v_idx, v_node_val, tmp_addrs, n_active, pending_stores=None, precomputed_addrs=0):
         """
         Gather node values: node_val[i] = mem[forest_values_p + idx[i]] for each element in vectors.
         Uses scalar loads since we need non-contiguous memory access.
         Uses double-buffered tmp_addrs to pipeline address computation with loads.
+
+        precomputed_addrs: Number of vi addresses already computed during vload phase.
+        These are stored in tmp_addrs[vi % 2] for each vi.
         """
         slots = []
         tmp_addrs_0, tmp_addrs_1 = tmp_addrs[0], tmp_addrs[1]
@@ -174,18 +177,21 @@ class KernelBuilder:
                 stores_to_do.append([("vstore", prev_idx_addrs[p], pv_idx[p]),
                                      ("vstore", prev_val_addrs[p], pv_val[p])])
 
-        # Compute addresses for vi=0 into buffer 0
-        cur_buf = tmp_addrs_0
-        next_buf = tmp_addrs_1
-
-        alu_bundle = {"alu": [("+", cur_buf[p], self.scratch["forest_values_p"], v_idx[p] + 0)
-                              for p in range(n_active)]}
-        if store_idx < len(stores_to_do):
-            alu_bundle["store"] = stores_to_do[store_idx]
-            store_idx += 1
-        slots.append(alu_bundle)
+        # Only compute vi=0 addresses if not precomputed
+        if precomputed_addrs == 0:
+            cur_buf = tmp_addrs_0
+            alu_bundle = {"alu": [("+", cur_buf[p], self.scratch["forest_values_p"], v_idx[p] + 0)
+                                  for p in range(n_active)]}
+            if store_idx < len(stores_to_do):
+                alu_bundle["store"] = stores_to_do[store_idx]
+                store_idx += 1
+            slots.append(alu_bundle)
 
         for vi in range(VLEN):
+            # Addresses for vi are in tmp_addrs[vi % 2]
+            cur_buf = tmp_addrs_0 if vi % 2 == 0 else tmp_addrs_1
+            next_buf = tmp_addrs_1 if vi % 2 == 0 else tmp_addrs_0
+
             # Load from cur_buf, compute next addresses into next_buf
             for load_cycle, p in enumerate(range(0, n_active, 2)):
                 load_slots = [("load", v_node_val[p] + vi, cur_buf[p])]
@@ -194,7 +200,8 @@ class KernelBuilder:
                 load_bundle = {"load": load_slots}
 
                 # On first load cycle, compute addresses for vi+1 into next_buf
-                if load_cycle == 0 and vi + 1 < VLEN:
+                # But only if vi+1 >= precomputed_addrs (not already computed)
+                if load_cycle == 0 and vi + 1 < VLEN and vi + 1 >= precomputed_addrs:
                     load_bundle["alu"] = [("+", next_buf[q], self.scratch["forest_values_p"], v_idx[q] + vi + 1)
                                           for q in range(n_active)]
 
@@ -202,9 +209,6 @@ class KernelBuilder:
                     load_bundle["store"] = stores_to_do[store_idx]
                     store_idx += 1
                 slots.append(load_bundle)
-
-            # Swap buffers
-            cur_buf, next_buf = next_buf, cur_buf
 
         # Finish any remaining stores
         for i in range(store_idx, len(stores_to_do)):
@@ -216,11 +220,15 @@ class KernelBuilder:
                                    v_idx_prev, v_val_prev, v_tmp1, hash_vecs,
                                    v_zero, v_two, v_n_nodes, n_active_prev,
                                    pending_stores=None,
-                                   next_vloads=None):
+                                   next_vloads=None,
+                                   precomputed_gather_addrs=0):
         """
         Interleave gather (LOAD+ALU) with hash + index update (VALU) and stores.
         Key optimization: Double-buffered tmp_addrs so we compute addresses for vi+1
         into buffer B while loading from buffer A. No idle ALU cycles!
+
+        precomputed_gather_addrs: Number of vi addresses already computed during vload phase.
+        These are stored in tmp_addrs[vi % 2] for each vi.
         """
         slots = []
         tmp_addrs_0, tmp_addrs_1 = tmp_addrs[0], tmp_addrs[1]  # Double buffered
@@ -261,24 +269,31 @@ class KernelBuilder:
                                      ("vload", next_v_val[p], next_val_addrs[p])])
 
         # === Pipelined gather with double-buffered addresses ===
-        # Compute addresses for vi=0 into buffer 0
-        cur_buf = tmp_addrs_0
-        next_buf = tmp_addrs_1
+        # If precomputed_gather_addrs > 0, addresses for vi < precomputed_gather_addrs
+        # are already in tmp_addrs[vi % 2]
 
-        bundle = {"alu": [("+", cur_buf[p], self.scratch["forest_values_p"], v_idx_cur[p] + 0)
-                          for p in range(n_active_cur)]}
-        if valu_idx < len(valu_ops):
-            bundle["valu"] = valu_ops[valu_idx]
-            valu_idx += 1
-        if store_idx < len(stores_to_do):
-            bundle["store"] = stores_to_do[store_idx]
-            store_idx += 1
-        if vload_idx < len(vloads_to_do):
-            bundle["load"] = vloads_to_do[vload_idx]
-            vload_idx += 1
-        slots.append(bundle)
+        # Only compute vi=0 addresses if not precomputed
+        if precomputed_gather_addrs == 0:
+            cur_buf = tmp_addrs_0
+            next_buf = tmp_addrs_1
+            bundle = {"alu": [("+", cur_buf[p], self.scratch["forest_values_p"], v_idx_cur[p] + 0)
+                              for p in range(n_active_cur)]}
+            if valu_idx < len(valu_ops):
+                bundle["valu"] = valu_ops[valu_idx]
+                valu_idx += 1
+            if store_idx < len(stores_to_do):
+                bundle["store"] = stores_to_do[store_idx]
+                store_idx += 1
+            if vload_idx < len(vloads_to_do):
+                bundle["load"] = vloads_to_do[vload_idx]
+                vload_idx += 1
+            slots.append(bundle)
 
         for vi in range(VLEN):
+            # Addresses for vi are in tmp_addrs[vi % 2]
+            cur_buf = tmp_addrs_0 if vi % 2 == 0 else tmp_addrs_1
+            next_buf = tmp_addrs_1 if vi % 2 == 0 else tmp_addrs_0
+
             # Load from cur_buf, compute next addresses into next_buf
             for load_cycle, p in enumerate(range(0, n_active_cur, 2)):
                 load_slots = [("load", v_node_val_cur[p] + vi, cur_buf[p])]
@@ -288,7 +303,8 @@ class KernelBuilder:
                 load_bundle = {"load": load_slots}
 
                 # On first load cycle of this vi, compute addresses for vi+1 into next_buf
-                if load_cycle == 0 and vi + 1 < VLEN:
+                # But only if vi+1 >= precomputed_gather_addrs (not already computed)
+                if load_cycle == 0 and vi + 1 < VLEN and vi + 1 >= precomputed_gather_addrs:
                     load_bundle["alu"] = [("+", next_buf[q], self.scratch["forest_values_p"], v_idx_cur[q] + vi + 1)
                                           for q in range(n_active_cur)]
 
@@ -303,9 +319,6 @@ class KernelBuilder:
                     store_idx += 1
 
                 slots.append(load_bundle)
-
-            # Swap buffers for next vi
-            cur_buf, next_buf = next_buf, cur_buf
 
         # Finish remaining VALU/stores/vloads
         while valu_idx < len(valu_ops) or store_idx < len(stores_to_do) or vload_idx < len(vloads_to_do):
@@ -453,6 +466,7 @@ class KernelBuilder:
             prev_prev_state = pipeline[0]  # i-2 slot (for stores)
 
             # === Phase 0: Compute addresses and load idx/val for current iteration ===
+            # Compute vload addresses first
             alu_slots = []
             for p in range(n_active):
                 offset_const = self.scratch_const(base_i + p * VLEN)
@@ -460,7 +474,10 @@ class KernelBuilder:
                 alu_slots.append(("+", cur_val_addrs[p], self.scratch["inp_values_p"], offset_const))
             iter_body.append({"alu": alu_slots})
 
-            # Load idx/val vectors (overlapped with stores from i-2 if available)
+            # Load idx/val vectors, overlapped with stores
+            tmp_addrs_0 = tmp_addrs[0]
+            precomputed_gather_addrs = 0
+
             for p in range(n_active):
                 bundle = {"load": [("vload", cur_v_idx[p], cur_idx_addrs[p]),
                                    ("vload", cur_v_val[p], cur_val_addrs[p])]}
@@ -483,20 +500,29 @@ class KernelBuilder:
                 pv_n, pv_v_idx, pv_v_val, pv_idx_addrs, pv_val_addrs, pv_node_val_set, pv_xor_done = prev_state
                 pv_node_val = v_node_val[pv_node_val_set]
 
-                # First, XOR previous iteration's values with gathered node values
+                # XOR previous iteration's values with gathered node values
+                # ALSO compute vi=0 gather addresses in the same cycle (ALU is free during XOR!)
                 if not pv_xor_done:
-                    iter_body.append({"valu": [("^", pv_v_val[p], pv_v_val[p], pv_node_val[p]) for p in range(pv_n)]})
+                    iter_body.append({
+                        "valu": [("^", pv_v_val[p], pv_v_val[p], pv_node_val[p]) for p in range(pv_n)],
+                        "alu": [("+", tmp_addrs_0[q], self.scratch["forest_values_p"], cur_v_idx[q] + 0)
+                                for q in range(n_active)]
+                    })
+                    precomputed_gather_addrs = 1
 
-                # Now do gather + hash + index_update in parallel (no extra vloads yet)
+                # Now do gather + hash + index_update in parallel
+                # vi=0 addresses precomputed during XOR cycle
                 iter_body.extend(self.build_gather_with_compute(
                     cur_v_idx, cur_node_val, tmp_addrs, n_active,
                     pv_v_idx, pv_v_val, v_tmp1, hash_vecs,
                     v_zero, v_two, v_n_nodes, pv_n,
                     None,  # No pending stores - already handled
-                    None   # No vloads interleaving for now
+                    None,  # No vloads interleaving for now
+                    precomputed_gather_addrs
                 ))
             else:
                 # No previous iteration - just gather (first iteration)
+                # No XOR to overlap with, so no precomputation
                 iter_body.extend(self.build_gather(cur_v_idx, cur_node_val, tmp_addrs, n_active))
 
             # Update pipeline state
