@@ -162,9 +162,10 @@ class KernelBuilder:
         """
         Gather node values: node_val[i] = mem[forest_values_p + idx[i]] for each element in vectors.
         Uses scalar loads since we need non-contiguous memory access.
-        If pending_stores provided, interleaves stores with gather (stores use different resources).
+        Uses double-buffered tmp_addrs to pipeline address computation with loads.
         """
         slots = []
+        tmp_addrs_0, tmp_addrs_1 = tmp_addrs[0], tmp_addrs[1]
         store_idx = 0
         stores_to_do = []
         if pending_stores:
@@ -173,27 +174,37 @@ class KernelBuilder:
                 stores_to_do.append([("vstore", prev_idx_addrs[p], pv_idx[p]),
                                      ("vstore", prev_val_addrs[p], pv_val[p])])
 
-        for vi in range(VLEN):
-            # Compute addresses for all streams in parallel (up to 12 ALU slots)
-            alu_bundle = {"alu": [("+", tmp_addrs[p], self.scratch["forest_values_p"], v_idx[p] + vi)
-                                  for p in range(n_active)]}
-            # Add store if available (ALU and STORE can run in parallel)
-            if store_idx < len(stores_to_do):
-                alu_bundle["store"] = stores_to_do[store_idx]
-                store_idx += 1
-            slots.append(alu_bundle)
+        # Compute addresses for vi=0 into buffer 0
+        cur_buf = tmp_addrs_0
+        next_buf = tmp_addrs_1
 
-            # Load 2 at a time (2 load slots available)
-            for p in range(0, n_active, 2):
-                load_slots = [("load", v_node_val[p] + vi, tmp_addrs[p])]
+        alu_bundle = {"alu": [("+", cur_buf[p], self.scratch["forest_values_p"], v_idx[p] + 0)
+                              for p in range(n_active)]}
+        if store_idx < len(stores_to_do):
+            alu_bundle["store"] = stores_to_do[store_idx]
+            store_idx += 1
+        slots.append(alu_bundle)
+
+        for vi in range(VLEN):
+            # Load from cur_buf, compute next addresses into next_buf
+            for load_cycle, p in enumerate(range(0, n_active, 2)):
+                load_slots = [("load", v_node_val[p] + vi, cur_buf[p])]
                 if p + 1 < n_active:
-                    load_slots.append(("load", v_node_val[p + 1] + vi, tmp_addrs[p + 1]))
+                    load_slots.append(("load", v_node_val[p + 1] + vi, cur_buf[p + 1]))
                 load_bundle = {"load": load_slots}
-                # Add store if available (LOAD and STORE can run in parallel)
+
+                # On first load cycle, compute addresses for vi+1 into next_buf
+                if load_cycle == 0 and vi + 1 < VLEN:
+                    load_bundle["alu"] = [("+", next_buf[q], self.scratch["forest_values_p"], v_idx[q] + vi + 1)
+                                          for q in range(n_active)]
+
                 if store_idx < len(stores_to_do):
                     load_bundle["store"] = stores_to_do[store_idx]
                     store_idx += 1
                 slots.append(load_bundle)
+
+            # Swap buffers
+            cur_buf, next_buf = next_buf, cur_buf
 
         # Finish any remaining stores
         for i in range(store_idx, len(stores_to_do)):
@@ -204,39 +215,34 @@ class KernelBuilder:
     def build_gather_with_compute(self, v_idx_cur, v_node_val_cur, tmp_addrs, n_active_cur,
                                    v_idx_prev, v_val_prev, v_tmp1, hash_vecs,
                                    v_zero, v_two, v_n_nodes, n_active_prev,
-                                   pending_stores=None):
+                                   pending_stores=None,
+                                   next_vloads=None):
         """
         Interleave gather (LOAD+ALU) with hash + index update (VALU) and stores.
-        This is the key optimization: VALU was idle during gather, now runs hash+index in parallel.
+        Key optimization: Double-buffered tmp_addrs so we compute addresses for vi+1
+        into buffer B while loading from buffer A. No idle ALU cycles!
         """
         slots = []
+        tmp_addrs_0, tmp_addrs_1 = tmp_addrs[0], tmp_addrs[1]  # Double buffered
 
         # Get all VALU operations: hash (12 ops) + index update (6 ops) = 18 ops
         valu_ops = []
         if n_active_prev > 0:
-            # Hash operations
             hash_ops = self.build_hash_vec_parallel(v_val_prev, v_tmp1, hash_vecs, n_active_prev)
             for h in hash_ops:
                 if isinstance(h, dict) and "valu" in h:
                     valu_ops.append(h["valu"])
 
-            # Index update operations (inline to get VALU slots)
-            # tmp1 = val % 2
             valu_ops.append([("%", v_tmp1[p], v_val_prev[p], v_two) for p in range(n_active_prev)])
-            # tmp1 = (tmp1 == 0)
             valu_ops.append([("==", v_tmp1[p], v_tmp1[p], v_zero) for p in range(n_active_prev)])
-            # tmp1 = 2 - tmp1
             valu_ops.append([("-", v_tmp1[p], v_two, v_tmp1[p]) for p in range(n_active_prev)])
-            # idx = idx * 2 + tmp1
             valu_ops.append([("multiply_add", v_idx_prev[p], v_idx_prev[p], v_two, v_tmp1[p]) for p in range(n_active_prev)])
-            # tmp1 = idx < n_nodes
             valu_ops.append([("<", v_tmp1[p], v_idx_prev[p], v_n_nodes) for p in range(n_active_prev)])
-            # idx = idx * tmp1
             valu_ops.append([("*", v_idx_prev[p], v_idx_prev[p], v_tmp1[p]) for p in range(n_active_prev)])
 
         valu_idx = 0
 
-        # Prepare stores if any
+        # Prepare stores
         store_idx = 0
         stores_to_do = []
         if pending_stores:
@@ -245,56 +251,76 @@ class KernelBuilder:
                 stores_to_do.append([("vstore", prev_idx_addrs[p], pv_idx[p]),
                                      ("vstore", prev_val_addrs[p], pv_val[p])])
 
+        # Prepare next vloads
+        vload_idx = 0
+        vloads_to_do = []
+        if next_vloads:
+            next_n, next_v_idx, next_v_val, next_idx_addrs, next_val_addrs = next_vloads
+            for p in range(next_n):
+                vloads_to_do.append([("vload", next_v_idx[p], next_idx_addrs[p]),
+                                     ("vload", next_v_val[p], next_val_addrs[p])])
+
+        # === Pipelined gather with double-buffered addresses ===
+        # Compute addresses for vi=0 into buffer 0
+        cur_buf = tmp_addrs_0
+        next_buf = tmp_addrs_1
+
+        bundle = {"alu": [("+", cur_buf[p], self.scratch["forest_values_p"], v_idx_cur[p] + 0)
+                          for p in range(n_active_cur)]}
+        if valu_idx < len(valu_ops):
+            bundle["valu"] = valu_ops[valu_idx]
+            valu_idx += 1
+        if store_idx < len(stores_to_do):
+            bundle["store"] = stores_to_do[store_idx]
+            store_idx += 1
+        if vload_idx < len(vloads_to_do):
+            bundle["load"] = vloads_to_do[vload_idx]
+            vload_idx += 1
+        slots.append(bundle)
+
         for vi in range(VLEN):
-            # Compute addresses for all streams (ALU)
-            bundle = {"alu": [("+", tmp_addrs[p], self.scratch["forest_values_p"], v_idx_cur[p] + vi)
-                              for p in range(n_active_cur)]}
-
-            # Add VALU operation if available
-            if valu_idx < len(valu_ops):
-                bundle["valu"] = valu_ops[valu_idx]
-                valu_idx += 1
-
-            # Add store if available
-            if store_idx < len(stores_to_do):
-                bundle["store"] = stores_to_do[store_idx]
-                store_idx += 1
-
-            slots.append(bundle)
-
-            # Load 2 at a time (2 load slots)
-            for p in range(0, n_active_cur, 2):
-                load_slots = [("load", v_node_val_cur[p] + vi, tmp_addrs[p])]
+            # Load from cur_buf, compute next addresses into next_buf
+            for load_cycle, p in enumerate(range(0, n_active_cur, 2)):
+                load_slots = [("load", v_node_val_cur[p] + vi, cur_buf[p])]
                 if p + 1 < n_active_cur:
-                    load_slots.append(("load", v_node_val_cur[p + 1] + vi, tmp_addrs[p + 1]))
+                    load_slots.append(("load", v_node_val_cur[p + 1] + vi, cur_buf[p + 1]))
+
                 load_bundle = {"load": load_slots}
 
-                # Add VALU operation if available
+                # On first load cycle of this vi, compute addresses for vi+1 into next_buf
+                if load_cycle == 0 and vi + 1 < VLEN:
+                    load_bundle["alu"] = [("+", next_buf[q], self.scratch["forest_values_p"], v_idx_cur[q] + vi + 1)
+                                          for q in range(n_active_cur)]
+
+                # Add VALU
                 if valu_idx < len(valu_ops):
                     load_bundle["valu"] = valu_ops[valu_idx]
                     valu_idx += 1
 
-                # Add store if available
+                # Add store
                 if store_idx < len(stores_to_do):
                     load_bundle["store"] = stores_to_do[store_idx]
                     store_idx += 1
 
                 slots.append(load_bundle)
 
-        # Finish any remaining VALU operations
-        while valu_idx < len(valu_ops):
-            bundle = {"valu": valu_ops[valu_idx]}
-            valu_idx += 1
-            # Add remaining stores if any
+            # Swap buffers for next vi
+            cur_buf, next_buf = next_buf, cur_buf
+
+        # Finish remaining VALU/stores/vloads
+        while valu_idx < len(valu_ops) or store_idx < len(stores_to_do) or vload_idx < len(vloads_to_do):
+            bundle = {}
+            if valu_idx < len(valu_ops):
+                bundle["valu"] = valu_ops[valu_idx]
+                valu_idx += 1
             if store_idx < len(stores_to_do):
                 bundle["store"] = stores_to_do[store_idx]
                 store_idx += 1
-            slots.append(bundle)
-
-        # Finish any remaining stores
-        while store_idx < len(stores_to_do):
-            slots.append({"store": stores_to_do[store_idx]})
-            store_idx += 1
+            if vload_idx < len(vloads_to_do):
+                bundle["load"] = vloads_to_do[vload_idx]
+                vload_idx += 1
+            if bundle:
+                slots.append(bundle)
 
         return slots
 
@@ -351,8 +377,9 @@ class KernelBuilder:
         v_two = self.alloc_scratch("v_two", VLEN)
         v_n_nodes = self.alloc_scratch("v_n_nodes", VLEN)
 
-        # Scalar addresses for gather and triple-buffered base addresses
-        tmp_addrs = [self.alloc_scratch(f"tmp_addr_{p}") for p in range(N_PARALLEL)]
+        # Scalar addresses for gather - double buffered for pipelined address computation
+        tmp_addrs = [[self.alloc_scratch(f"tmp_addr_{s}_{p}") for p in range(N_PARALLEL)] for s in range(2)]
+        # Triple-buffered base addresses
         idx_addrs = [[self.alloc_scratch(f"idx_addr_{s}_{p}") for p in range(N_PARALLEL)] for s in range(3)]
         val_addrs = [[self.alloc_scratch(f"val_addr_{s}_{p}") for p in range(N_PARALLEL)] for s in range(3)]
 
@@ -460,20 +487,19 @@ class KernelBuilder:
                 if not pv_xor_done:
                     iter_body.append({"valu": [("^", pv_v_val[p], pv_v_val[p], pv_node_val[p]) for p in range(pv_n)]})
 
-                # Now do gather + hash + index_update in parallel
+                # Now do gather + hash + index_update in parallel (no extra vloads yet)
                 iter_body.extend(self.build_gather_with_compute(
                     cur_v_idx, cur_node_val, tmp_addrs, n_active,
                     pv_v_idx, pv_v_val, v_tmp1, hash_vecs,
                     v_zero, v_two, v_n_nodes, pv_n,
-                    None  # No pending stores - already handled
+                    None,  # No pending stores - already handled
+                    None   # No vloads interleaving for now
                 ))
-                # Index update is now done inside build_gather_with_compute
             else:
                 # No previous iteration - just gather (first iteration)
                 iter_body.extend(self.build_gather(cur_v_idx, cur_node_val, tmp_addrs, n_active))
 
             # Update pipeline state
-            # Shift pipeline: i-2 <- i-1, i-1 <- current, current will be set next iteration
             pipeline[0] = pipeline[1]  # Old i-1 becomes i-2 (ready for store)
             pipeline[1] = (n_active, cur_v_idx, cur_v_val, cur_idx_addrs, cur_val_addrs, node_val_set, False)
 
