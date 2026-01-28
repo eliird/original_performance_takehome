@@ -470,6 +470,17 @@ class KernelBuilder:
         root_node_val = self.alloc_scratch("root_node_val")
         v_root_node_val = self.alloc_scratch("v_root_node_val", VLEN)
 
+        # === Round 1 optimization: all indices are 1 or 2 after round 0 ===
+        # We load tree[1] and tree[2] once, then use vselect based on idx
+        node_val_1 = self.alloc_scratch("node_val_1")
+        node_val_2 = self.alloc_scratch("node_val_2")
+        v_node_val_1 = self.alloc_scratch("v_node_val_1", VLEN)
+        v_node_val_2 = self.alloc_scratch("v_node_val_2", VLEN)
+        v_one = self.alloc_scratch("v_one", VLEN)
+        one_const = self.scratch_const(1)
+        # Condition vectors for vselect (separate from v_tmp1 to avoid conflicts)
+        v_cond = [self.alloc_scratch(f"v_cond_{p}", VLEN) for p in range(N_PARALLEL)]
+
         # === Main loop body ===
         body = []
 
@@ -477,8 +488,22 @@ class KernelBuilder:
         # forest_values_p already contains the address, so we can load directly from it
         body.append({"load": [("load", root_node_val, self.scratch["forest_values_p"])]})
 
+        # Load tree[1] and tree[2] for Round 1 optimization
+        # We need to compute forest_values_p + 1 and forest_values_p + 2
+        tmp_addr_1 = self.alloc_scratch("tmp_addr_1")
+        tmp_addr_2 = self.alloc_scratch("tmp_addr_2")
+        body.append({"alu": [("+", tmp_addr_1, self.scratch["forest_values_p"], one_const),
+                             ("+", tmp_addr_2, self.scratch["forest_values_p"], two_const)]})
+        body.append({"load": [("load", node_val_1, tmp_addr_1),
+                              ("load", node_val_2, tmp_addr_2)]})
+
         # Broadcast root node value to vector for Round 0
         body.append({"valu": [("vbroadcast", v_root_node_val, root_node_val)]})
+
+        # Broadcast tree[1] and tree[2] values for Round 1
+        body.append({"valu": [("vbroadcast", v_node_val_1, node_val_1),
+                              ("vbroadcast", v_node_val_2, node_val_2),
+                              ("vbroadcast", v_one, one_const)]})
 
         # Broadcast basic constants
         body.append({"valu": [("vbroadcast", v_zero, zero_const), ("vbroadcast", v_two, two_const),
@@ -668,6 +693,72 @@ class KernelBuilder:
                 while next_alu_idx < len(next_vload_alu_ops):
                     iter_body.append({"alu": next_vload_alu_ops[next_alu_idx]})
                     next_alu_idx += 1
+
+            elif rnd == 1:
+                # === Round 1 optimization: all indices are 1 or 2 ===
+                # Use vselect to pick between pre-loaded tree[1] and tree[2] values
+                # node_val = (idx == 1) ? v_node_val_1 : v_node_val_2
+                #
+                # vselect uses flow slot (limit 1), so we do one vector at a time
+                # But we can overlap with VALU ops and ALU ops
+
+                # First compute condition: cond[p] = (cur_v_idx[p] == v_one)
+                # Then vselect: cur_node_val[p] = cond ? v_node_val_1 : v_node_val_2
+                # Use v_cond instead of v_tmp1 to avoid conflicts with hash computation
+                valu_cmp_ops = []
+                for p in range(n_active):
+                    valu_cmp_ops.append(("==", v_cond[p], cur_v_idx[p], v_one))
+
+                # Build all ops: compare ops + remaining VALU
+                all_valu_ops = []
+                # Compare ops (can fit 6 per cycle)
+                for i in range(0, len(valu_cmp_ops), 6):
+                    all_valu_ops.append(valu_cmp_ops[i:i+6])
+                all_valu_ops.extend(remaining_valu)
+
+                # vselect ops - one per cycle (flow slot limit)
+                vselect_ops = []
+                for p in range(n_active):
+                    vselect_ops.append(("vselect", cur_node_val[p], v_cond[p], v_node_val_1, v_node_val_2))
+
+                # Emit bundles: first do compare ops, then remaining VALU + vselects
+                # IMPORTANT: vselect depends on compare results, so compares must complete first!
+                next_alu_idx = 0
+                valu_idx_local = 0
+                vselect_idx = 0
+
+                # Count how many cycles are just for compares (before vselects can start)
+                n_compare_cycles = (len(valu_cmp_ops) + 5) // 6  # ceiling division
+
+                # Phase 1: Compare ops only (no vselects yet - data dependency!)
+                while valu_idx_local < n_compare_cycles:
+                    bundle = {"valu": all_valu_ops[valu_idx_local]}
+                    valu_idx_local += 1
+                    if next_alu_idx < len(next_vload_alu_ops):
+                        bundle["alu"] = next_vload_alu_ops[next_alu_idx]
+                        next_alu_idx += 1
+                    iter_body.append(bundle)
+
+                # Phase 2: Remaining VALU ops (hash/index) + vselects in parallel
+                while valu_idx_local < len(all_valu_ops) or vselect_idx < len(vselect_ops):
+                    bundle = {}
+                    if valu_idx_local < len(all_valu_ops):
+                        bundle["valu"] = all_valu_ops[valu_idx_local]
+                        valu_idx_local += 1
+                    if vselect_idx < len(vselect_ops):
+                        bundle["flow"] = [vselect_ops[vselect_idx]]
+                        vselect_idx += 1
+                    if next_alu_idx < len(next_vload_alu_ops):
+                        bundle["alu"] = next_vload_alu_ops[next_alu_idx]
+                        next_alu_idx += 1
+                    if bundle:
+                        iter_body.append(bundle)
+
+                # Phase 3: Finish remaining ALU ops
+                while next_alu_idx < len(next_vload_alu_ops):
+                    iter_body.append({"alu": next_vload_alu_ops[next_alu_idx]})
+                    next_alu_idx += 1
+
             else:
                 # === Normal gather for Round 1+ ===
                 # Compute first gather address, overlapped with any remaining VALU
