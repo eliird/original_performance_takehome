@@ -133,22 +133,29 @@ class KernelBuilder:
 
         return slots
 
-    def build_hash_vec_parallel(self, v_val, v_tmp1, v_tmp2, hash_const_vecs, n_active):
+    def build_hash_vec_parallel(self, v_val, v_tmp1, hash_vecs, n_active):
         """
-        Vector hash computation for n_active parallel vectors.
-        Processes all vectors through each hash stage using VALU parallelism.
+        Optimized vector hash using multiply_add for compatible stages.
+
+        Stages 0,2,4: (a + c1) + (a << n) = a * (1 + 2^n) + c1 -> multiply_add
+        Stages 1,3,5: (a ^ c1) ^ (a >> n) or (a + c1) ^ (a << n) -> 3 ops
+
+        hash_vecs contains precomputed broadcast vectors for all constants.
         """
         slots = []
         for hi, (op1, val1, op2, op3, val3) in enumerate(HASH_STAGES):
-            val1_vec, val3_vec = hash_const_vecs[hi]
-            val1_const = self.scratch_const(val1)
-            val3_const = self.scratch_const(val3)
+            c1_vec, c2_vec = hash_vecs[hi]  # c2 is either multiplier or shift amount
 
-            # Broadcast constants, then compute: tmp1 = op1(val, c1), tmp2 = op3(val, c3), val = op2(tmp1, tmp2)
-            slots.append({"valu": [("vbroadcast", val1_vec, val1_const), ("vbroadcast", val3_vec, val3_const)]})
-            slots.append({"valu": [(op1, v_tmp1[p], v_val[p], val1_vec) for p in range(n_active)]})
-            slots.append({"valu": [(op3, v_tmp2[p], v_val[p], val3_vec) for p in range(n_active)]})
-            slots.append({"valu": [(op2, v_val[p], v_tmp1[p], v_tmp2[p]) for p in range(n_active)]})
+            if op1 == "+" and op2 == "+" and op3 == "<<":
+                # Can use multiply_add: val = val * (1 + 2^shift) + c1
+                # c2_vec contains (1 + 2^val3) as multiplier
+                slots.append({"valu": [("multiply_add", v_val[p], v_val[p], c2_vec, c1_vec)
+                                       for p in range(n_active)]})
+            else:
+                # General case: tmp1 = op1(val, c1), tmp2 = op3(val, c2), val = op2(tmp1, tmp2)
+                slots.append({"valu": [(op1, v_tmp1[p], v_val[p], c1_vec) for p in range(n_active)]})
+                slots.append({"valu": [(op3, v_val[p], v_val[p], c2_vec) for p in range(n_active)]})
+                slots.append({"valu": [(op2, v_val[p], v_tmp1[p], v_val[p]) for p in range(n_active)]})
         return slots
 
     def build_gather(self, v_idx, v_node_val, tmp_addrs, n_active):
@@ -232,14 +239,33 @@ class KernelBuilder:
         idx_addrs = [[self.alloc_scratch(f"idx_addr_{s}_{p}") for p in range(N_PARALLEL)] for s in range(2)]
         val_addrs = [[self.alloc_scratch(f"val_addr_{s}_{p}") for p in range(N_PARALLEL)] for s in range(2)]
 
-        # Hash constant vectors
-        hash_const_vecs = [(self.alloc_scratch(f"hash_c1_{hi}", VLEN),
-                            self.alloc_scratch(f"hash_c3_{hi}", VLEN)) for hi in range(len(HASH_STAGES))]
+        # Hash constant vectors - precompute all constants
+        # For multiply_add stages (0,2,4): c1=constant, c2=multiplier (1 + 2^shift)
+        # For XOR stages (1,3,5): c1=constant, c2=shift amount
+        hash_vecs = []
+        for hi in range(len(HASH_STAGES)):
+            c1_vec = self.alloc_scratch(f"hash_c1_{hi}", VLEN)
+            c2_vec = self.alloc_scratch(f"hash_c2_{hi}", VLEN)
+            hash_vecs.append((c1_vec, c2_vec))
 
         # === Main loop body ===
         body = []
+
+        # Broadcast basic constants
         body.append({"valu": [("vbroadcast", v_zero, zero_const), ("vbroadcast", v_one, one_const),
                               ("vbroadcast", v_two, two_const), ("vbroadcast", v_n_nodes, self.scratch["n_nodes"])]})
+
+        # Precompute and broadcast all hash constants (done once, not per iteration)
+        for hi, (op1, val1, op2, op3, val3) in enumerate(HASH_STAGES):
+            c1_vec, c2_vec = hash_vecs[hi]
+            c1_const = self.scratch_const(val1)
+            if op1 == "+" and op2 == "+" and op3 == "<<":
+                # multiply_add: multiplier = 1 + 2^shift
+                c2_const = self.scratch_const(1 + (1 << val3))
+            else:
+                # shift amount for >> or <<
+                c2_const = self.scratch_const(val3)
+            body.append({"valu": [("vbroadcast", c1_vec, c1_const), ("vbroadcast", c2_vec, c2_const)]})
 
         stride = N_PARALLEL * VLEN
         assert batch_size % VLEN == 0, f"batch_size must be divisible by VLEN ({VLEN})"
@@ -283,7 +309,7 @@ class KernelBuilder:
                 body.append({"valu": [("^", v_val[p], v_val[p], v_node_val[p]) for p in range(n_active)]})
 
                 # Hash computation
-                body.extend(self.build_hash_vec_parallel(v_val, v_tmp1, v_tmp2, hash_const_vecs, n_active))
+                body.extend(self.build_hash_vec_parallel(v_val, v_tmp1, hash_vecs, n_active))
 
                 # Update indices
                 body.extend(self.build_index_update(v_idx, v_val, v_tmp1, v_tmp3, v_zero, v_one, v_two, v_n_nodes, n_active))
