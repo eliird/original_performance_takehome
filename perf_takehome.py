@@ -241,8 +241,11 @@ class KernelBuilder:
 
         # Scalar addresses for gather/scatter (one per parallel stream)
         tmp_addrs = [self.alloc_scratch(f"tmp_addr_{p}") for p in range(N_PARALLEL)]
-        idx_base_addrs = [self.alloc_scratch(f"idx_base_addr_{p}") for p in range(N_PARALLEL)]
-        val_base_addrs = [self.alloc_scratch(f"val_base_addr_{p}") for p in range(N_PARALLEL)]
+        # Double-buffered addresses for software pipelining (A and B sets)
+        idx_base_addrs_A = [self.alloc_scratch(f"idx_base_addr_A_{p}") for p in range(N_PARALLEL)]
+        val_base_addrs_A = [self.alloc_scratch(f"val_base_addr_A_{p}") for p in range(N_PARALLEL)]
+        idx_base_addrs_B = [self.alloc_scratch(f"idx_base_addr_B_{p}") for p in range(N_PARALLEL)]
+        val_base_addrs_B = [self.alloc_scratch(f"val_base_addr_B_{p}") for p in range(N_PARALLEL)]
 
         # Pre-allocate hash constant vectors (shared across all parallel streams)
         hash_const_vecs = []
@@ -263,15 +266,26 @@ class KernelBuilder:
 
         # Process batch_size elements in groups of N_PARALLEL * VLEN
         # With 256 batch_size and stride=48, we process: 0-47, 48-95, 96-143, 144-191, 192-239, then 240-255 (partial)
-        # For simplicity, we require batch_size to be divisible by stride, or handle partial batches
         stride = N_PARALLEL * VLEN
         assert batch_size % VLEN == 0, f"batch_size must be divisible by VLEN ({VLEN})"
+
+        # Double-buffered address sets for software pipelining
+        idx_base_addrs_sets = [idx_base_addrs_A, idx_base_addrs_B]
+        val_base_addrs_sets = [val_base_addrs_A, val_base_addrs_B]
+
+        # For software pipelining: track pending stores from previous iteration
+        pending_stores = None
+        use_set = 0  # Alternate between 0 and 1
 
         for round in range(rounds):
             for base_i in range(0, batch_size, stride):
                 # Calculate how many parallel streams we can use for this iteration
                 remaining = batch_size - base_i
                 n_active = min(N_PARALLEL, (remaining + VLEN - 1) // VLEN)
+
+                # Select current address set
+                idx_base_addrs = idx_base_addrs_sets[use_set]
+                val_base_addrs = val_base_addrs_sets[use_set]
 
                 # Compute base addresses for active parallel streams (use scalar ALU, up to 12 slots)
                 alu_slots = []
@@ -282,12 +296,34 @@ class KernelBuilder:
                     alu_slots.append(("+", val_base_addrs[p], self.scratch["inp_values_p"], offset_const))
                 body.append({"alu": alu_slots})
 
-                # Vector load indices and values (2 load slots per cycle)
+                # Software pipelining: overlap stores from previous iteration with loads
+                # We have 2 load slots and 2 store slots, so we can do both in parallel
                 for p in range(n_active):
-                    body.append({"load": [
-                        ("vload", v_idx[p], idx_base_addrs[p]),
-                        ("vload", v_val[p], val_base_addrs[p]),
-                    ]})
+                    bundle = {
+                        "load": [
+                            ("vload", v_idx[p], idx_base_addrs[p]),
+                            ("vload", v_val[p], val_base_addrs[p]),
+                        ]
+                    }
+                    # Add pending stores if available
+                    if pending_stores is not None:
+                        prev_n, prev_idx_addrs, prev_val_addrs, prev_v_idx, prev_v_val = pending_stores
+                        if p < prev_n:
+                            bundle["store"] = [
+                                ("vstore", prev_idx_addrs[p], prev_v_idx[p]),
+                                ("vstore", prev_val_addrs[p], prev_v_val[p]),
+                            ]
+                    body.append(bundle)
+
+                # Finish any remaining pending stores (if prev had more streams than current)
+                if pending_stores is not None:
+                    prev_n, prev_idx_addrs, prev_val_addrs, prev_v_idx, prev_v_val = pending_stores
+                    for p in range(n_active, prev_n):
+                        body.append({"store": [
+                            ("vstore", prev_idx_addrs[p], prev_v_idx[p]),
+                            ("vstore", prev_val_addrs[p], prev_v_val[p]),
+                        ]})
+                    pending_stores = None
 
                 # Debug compare for indices and values
                 for p in range(n_active):
@@ -298,9 +334,6 @@ class KernelBuilder:
                         tuple((round, offset + vi, "val") for vi in range(VLEN)))))
 
                 # Gather node_val = mem[forest_values_p + idx[i]] for each element
-                # Use all 12 scalar ALU slots to compute addresses, then load
-                # We have 8 elements per vector * n_active vectors gathers
-                # With 12 ALU slots and 2 load slots per cycle, this is the bottleneck
                 for vi in range(VLEN):
                     # Compute all n_active addresses in parallel (up to 12 ALU slots)
                     alu_slots = []
@@ -379,12 +412,20 @@ class KernelBuilder:
                     body.append(("debug", ("vcompare", v_idx[p],
                         tuple((round, offset + vi, "wrapped_idx") for vi in range(VLEN)))))
 
-                # Vector store indices and values back (2 stores per cycle)
-                for p in range(n_active):
-                    body.append({"store": [
-                        ("vstore", idx_base_addrs[p], v_idx[p]),
-                        ("vstore", val_base_addrs[p], v_val[p]),
-                    ]})
+                # Save current addresses for stores in next iteration (using current set's addresses)
+                pending_stores = (n_active, idx_base_addrs, val_base_addrs, v_idx, v_val)
+
+                # Swap to other address set for next iteration
+                use_set = 1 - use_set
+
+        # Flush final pending stores
+        if pending_stores is not None:
+            prev_n, prev_idx_addrs, prev_val_addrs, prev_v_idx, prev_v_val = pending_stores
+            for p in range(prev_n):
+                body.append({"store": [
+                    ("vstore", prev_idx_addrs[p], prev_v_idx[p]),
+                    ("vstore", prev_val_addrs[p], prev_v_val[p]),
+                ]})
 
         body_instrs = self.build(body)
         self.instrs.extend(body_instrs)
