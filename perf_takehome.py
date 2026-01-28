@@ -158,22 +158,47 @@ class KernelBuilder:
                 slots.append({"valu": [(op2, v_val[p], v_tmp1[p], v_val[p]) for p in range(n_active)]})
         return slots
 
-    def build_gather(self, v_idx, v_node_val, tmp_addrs, n_active):
+    def build_gather(self, v_idx, v_node_val, tmp_addrs, n_active, pending_stores=None):
         """
         Gather node values: node_val[i] = mem[forest_values_p + idx[i]] for each element in vectors.
         Uses scalar loads since we need non-contiguous memory access.
+        If pending_stores provided, interleaves stores with gather (stores use different resources).
         """
         slots = []
+        store_idx = 0
+        stores_to_do = []
+        if pending_stores:
+            prev_n, prev_idx_addrs, prev_val_addrs, pv_idx, pv_val = pending_stores
+            for p in range(prev_n):
+                stores_to_do.append([("vstore", prev_idx_addrs[p], pv_idx[p]),
+                                     ("vstore", prev_val_addrs[p], pv_val[p])])
+
         for vi in range(VLEN):
             # Compute addresses for all streams in parallel (up to 12 ALU slots)
-            slots.append({"alu": [("+", tmp_addrs[p], self.scratch["forest_values_p"], v_idx[p] + vi)
-                                  for p in range(n_active)]})
+            alu_bundle = {"alu": [("+", tmp_addrs[p], self.scratch["forest_values_p"], v_idx[p] + vi)
+                                  for p in range(n_active)]}
+            # Add store if available (ALU and STORE can run in parallel)
+            if store_idx < len(stores_to_do):
+                alu_bundle["store"] = stores_to_do[store_idx]
+                store_idx += 1
+            slots.append(alu_bundle)
+
             # Load 2 at a time (2 load slots available)
             for p in range(0, n_active, 2):
                 load_slots = [("load", v_node_val[p] + vi, tmp_addrs[p])]
                 if p + 1 < n_active:
                     load_slots.append(("load", v_node_val[p + 1] + vi, tmp_addrs[p + 1]))
-                slots.append({"load": load_slots})
+                load_bundle = {"load": load_slots}
+                # Add store if available (LOAD and STORE can run in parallel)
+                if store_idx < len(stores_to_do):
+                    load_bundle["store"] = stores_to_do[store_idx]
+                    store_idx += 1
+                slots.append(load_bundle)
+
+        # Finish any remaining stores
+        for i in range(store_idx, len(stores_to_do)):
+            slots.append({"store": stores_to_do[i]})
+
         return slots
 
     def build_index_update(self, v_idx, v_val, v_tmp1, v_zero, v_two, v_n_nodes, n_active):
@@ -313,17 +338,12 @@ class KernelBuilder:
                         iter_body.append({"store": [("vstore", prev_idx_addrs[p], pv_idx[p]),
                                                     ("vstore", prev_val_addrs[p], pv_val[p])]})
                     pending_stores = None
+            # Gather node values (interleaved with pending stores if data was prefetched)
+            if data_prefetched and pending_stores:
+                iter_body.extend(self.build_gather(cur_v_idx, v_node_val, tmp_addrs, n_active, pending_stores))
+                pending_stores = None
             else:
-                # Data was prefetched - just do stores from previous iteration
-                if pending_stores:
-                    prev_n, prev_idx_addrs, prev_val_addrs, pv_idx, pv_val = pending_stores
-                    for p in range(prev_n):
-                        iter_body.append({"store": [("vstore", prev_idx_addrs[p], pv_idx[p]),
-                                                    ("vstore", prev_val_addrs[p], pv_val[p])]})
-                    pending_stores = None
-
-            # Gather node values
-            iter_body.extend(self.build_gather(cur_v_idx, v_node_val, tmp_addrs, n_active))
+                iter_body.extend(self.build_gather(cur_v_idx, v_node_val, tmp_addrs, n_active))
 
             # Check if there's a next iteration to prefetch
             has_next = iter_idx + 1 < len(iterations)
