@@ -176,24 +176,22 @@ class KernelBuilder:
                 slots.append({"load": load_slots})
         return slots
 
-    def build_index_update(self, v_idx, v_val, v_tmp1, v_tmp3, v_zero, v_one, v_two, v_n_nodes, n_active):
+    def build_index_update(self, v_idx, v_val, v_tmp1, v_zero, v_two, v_n_nodes, n_active):
         """
         Compute next index: idx = 2*idx + (1 if val%2==0 else 2), then wrap if >= n_nodes.
+        Uses arithmetic instead of vselect to avoid flow slot bottleneck.
         """
         slots = []
-        # tmp1 = (val % 2 == 0)
+        # tmp1 = (val % 2 == 0), gives 1 if even, 0 if odd
         slots.append({"valu": [("%", v_tmp1[p], v_val[p], v_two) for p in range(n_active)]})
         slots.append({"valu": [("==", v_tmp1[p], v_tmp1[p], v_zero) for p in range(n_active)]})
-        # tmp3 = select(tmp1, 1, 2) - sequential due to 1 flow slot
-        for p in range(n_active):
-            slots.append(("flow", ("vselect", v_tmp3[p], v_tmp1[p], v_one, v_two)))
-        # idx = idx * 2 + tmp3
-        slots.append({"valu": [("*", v_idx[p], v_idx[p], v_two) for p in range(n_active)]})
-        slots.append({"valu": [("+", v_idx[p], v_idx[p], v_tmp3[p]) for p in range(n_active)]})
-        # Wrap: idx = 0 if idx >= n_nodes else idx
+        # tmp1 = 2 - tmp1: gives 1 if even (2-1=1), 2 if odd (2-0=2)
+        slots.append({"valu": [("-", v_tmp1[p], v_two, v_tmp1[p]) for p in range(n_active)]})
+        # idx = idx * 2 + tmp1 using multiply_add
+        slots.append({"valu": [("multiply_add", v_idx[p], v_idx[p], v_two, v_tmp1[p]) for p in range(n_active)]})
+        # Wrap: idx = idx * (idx < n_nodes)
         slots.append({"valu": [("<", v_tmp1[p], v_idx[p], v_n_nodes) for p in range(n_active)]})
-        for p in range(n_active):
-            slots.append(("flow", ("vselect", v_idx[p], v_tmp1[p], v_idx[p], v_zero)))
+        slots.append({"valu": [("*", v_idx[p], v_idx[p], v_tmp1[p]) for p in range(n_active)]})
         return slots
 
     def build_kernel(self, forest_height: int, n_nodes: int, batch_size: int, rounds: int):
@@ -214,7 +212,6 @@ class KernelBuilder:
             self.add("load", ("load", self.scratch[v], tmp1))
 
         zero_const = self.scratch_const(0)
-        one_const = self.scratch_const(1)
         two_const = self.scratch_const(2)
 
         self.add("flow", ("pause",))
@@ -225,11 +222,9 @@ class KernelBuilder:
         v_val = [self.alloc_scratch(f"v_val_{p}", VLEN) for p in range(N_PARALLEL)]
         v_node_val = [self.alloc_scratch(f"v_node_val_{p}", VLEN) for p in range(N_PARALLEL)]
         v_tmp1 = [self.alloc_scratch(f"v_tmp1_{p}", VLEN) for p in range(N_PARALLEL)]
-        v_tmp3 = [self.alloc_scratch(f"v_tmp3_{p}", VLEN) for p in range(N_PARALLEL)]
 
         # Vector constants
         v_zero = self.alloc_scratch("v_zero", VLEN)
-        v_one = self.alloc_scratch("v_one", VLEN)
         v_two = self.alloc_scratch("v_two", VLEN)
         v_n_nodes = self.alloc_scratch("v_n_nodes", VLEN)
 
@@ -251,8 +246,8 @@ class KernelBuilder:
         body = []
 
         # Broadcast basic constants
-        body.append({"valu": [("vbroadcast", v_zero, zero_const), ("vbroadcast", v_one, one_const),
-                              ("vbroadcast", v_two, two_const), ("vbroadcast", v_n_nodes, self.scratch["n_nodes"])]})
+        body.append({"valu": [("vbroadcast", v_zero, zero_const), ("vbroadcast", v_two, two_const),
+                              ("vbroadcast", v_n_nodes, self.scratch["n_nodes"])]})
 
         # Precompute and broadcast all hash constants (done once, not per iteration)
         for hi, (op1, val1, op2, op3, val3) in enumerate(HASH_STAGES):
@@ -311,7 +306,7 @@ class KernelBuilder:
                 body.extend(self.build_hash_vec_parallel(v_val, v_tmp1, hash_vecs, n_active))
 
                 # Update indices
-                body.extend(self.build_index_update(v_idx, v_val, v_tmp1, v_tmp3, v_zero, v_one, v_two, v_n_nodes, n_active))
+                body.extend(self.build_index_update(v_idx, v_val, v_tmp1, v_zero, v_two, v_n_nodes, n_active))
 
                 # Queue stores for next iteration
                 pending_stores = (n_active, cur_idx_addrs, cur_val_addrs, v_idx, v_val)
