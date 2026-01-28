@@ -133,41 +133,15 @@ class KernelBuilder:
 
         return slots
 
-    def build_hash_vec(self, val_hash_addr, tmp1, tmp2, hash_const_vecs, round, base_i):
-        """Vector version of build_hash - operates on VLEN elements at once.
-
-        hash_const_vecs is a list of (val1_vec, val3_vec) tuples, pre-allocated.
-        """
-        slots = []
-
-        for hi, (op1, val1, op2, op3, val3) in enumerate(HASH_STAGES):
-            val1_vec, val3_vec = hash_const_vecs[hi]
-            val1_const = self.scratch_const(val1)
-            val3_const = self.scratch_const(val3)
-
-            # Broadcast constants to vectors (reuse pre-allocated vectors)
-            slots.append(("valu", ("vbroadcast", val1_vec, val1_const)))
-            slots.append(("valu", ("vbroadcast", val3_vec, val3_const)))
-
-            # tmp1 = op1(val_hash, val1), tmp2 = op3(val_hash, val3)
-            slots.append(("valu", (op1, tmp1, val_hash_addr, val1_vec)))
-            slots.append(("valu", (op3, tmp2, val_hash_addr, val3_vec)))
-            # val_hash = op2(tmp1, tmp2)
-            slots.append(("valu", (op2, val_hash_addr, tmp1, tmp2)))
-
-            # Debug: compare each element
-            slots.append(("debug", ("vcompare", val_hash_addr,
-                tuple((round, base_i + vi, "hash_stage", hi) for vi in range(VLEN)))))
-
-        return slots
-
     def build_kernel(
         self, forest_height: int, n_nodes: int, batch_size: int, rounds: int
     ):
         """
-        Vectorized implementation processing VLEN (8) elements at a time.
-        Uses SIMD for parallel computation where possible.
+        Vectorized implementation processing N_PARALLEL * VLEN (6 * 8 = 48) elements at a time.
+        Uses all 6 VALU slots in parallel.
         """
+        N_PARALLEL = 6  # Number of vectors to process in parallel (matches VALU slot limit)
+
         # Scalar temporary (used for loading init vars)
         tmp1 = self.alloc_scratch("tmp1")
 
@@ -199,108 +173,196 @@ class KernelBuilder:
 
         body = []  # array of slots
 
-        # Vector scratch registers (VLEN elements each)
-        v_idx = self.alloc_scratch("v_idx", VLEN)
-        v_val = self.alloc_scratch("v_val", VLEN)
-        v_node_val = self.alloc_scratch("v_node_val", VLEN)
-        v_tmp1 = self.alloc_scratch("v_tmp1", VLEN)
-        v_tmp2 = self.alloc_scratch("v_tmp2", VLEN)
-        v_tmp3 = self.alloc_scratch("v_tmp3", VLEN)
+        # Allocate N_PARALLEL sets of vector registers
+        v_idx = [self.alloc_scratch(f"v_idx_{p}", VLEN) for p in range(N_PARALLEL)]
+        v_val = [self.alloc_scratch(f"v_val_{p}", VLEN) for p in range(N_PARALLEL)]
+        v_node_val = [self.alloc_scratch(f"v_node_val_{p}", VLEN) for p in range(N_PARALLEL)]
+        v_tmp1 = [self.alloc_scratch(f"v_tmp1_{p}", VLEN) for p in range(N_PARALLEL)]
+        v_tmp2 = [self.alloc_scratch(f"v_tmp2_{p}", VLEN) for p in range(N_PARALLEL)]
+        v_tmp3 = [self.alloc_scratch(f"v_tmp3_{p}", VLEN) for p in range(N_PARALLEL)]
 
-        # Vector constants
+        # Shared vector constants (broadcast once)
         v_zero = self.alloc_scratch("v_zero", VLEN)
         v_one = self.alloc_scratch("v_one", VLEN)
         v_two = self.alloc_scratch("v_two", VLEN)
         v_n_nodes = self.alloc_scratch("v_n_nodes", VLEN)
 
-        # Scalar addresses for gather/scatter
-        tmp_addr = self.alloc_scratch("tmp_addr")
-        idx_base_addr = self.alloc_scratch("idx_base_addr")
-        val_base_addr = self.alloc_scratch("val_base_addr")
+        # Scalar addresses for gather/scatter (one per parallel stream)
+        tmp_addrs = [self.alloc_scratch(f"tmp_addr_{p}") for p in range(N_PARALLEL)]
+        idx_base_addrs = [self.alloc_scratch(f"idx_base_addr_{p}") for p in range(N_PARALLEL)]
+        val_base_addrs = [self.alloc_scratch(f"val_base_addr_{p}") for p in range(N_PARALLEL)]
 
-        # Pre-allocate hash constant vectors (one pair per hash stage)
+        # Pre-allocate hash constant vectors (shared across all parallel streams)
         hash_const_vecs = []
         for hi in range(len(HASH_STAGES)):
             val1_vec = self.alloc_scratch(f"hash_val1_{hi}", VLEN)
             val3_vec = self.alloc_scratch(f"hash_val3_{hi}", VLEN)
             hash_const_vecs.append((val1_vec, val3_vec))
 
-        # Initialize vector constants
-        body.append(("valu", ("vbroadcast", v_zero, zero_const)))
-        body.append(("valu", ("vbroadcast", v_one, one_const)))
-        body.append(("valu", ("vbroadcast", v_two, two_const)))
-        body.append(("valu", ("vbroadcast", v_n_nodes, self.scratch["n_nodes"])))
+        # Initialize vector constants (can do up to 6 in parallel)
+        body.append({
+            "valu": [
+                ("vbroadcast", v_zero, zero_const),
+                ("vbroadcast", v_one, one_const),
+                ("vbroadcast", v_two, two_const),
+                ("vbroadcast", v_n_nodes, self.scratch["n_nodes"]),
+            ]
+        })
 
-        # Process batch_size elements in groups of VLEN
+        # Process batch_size elements in groups of N_PARALLEL * VLEN
+        # With 256 batch_size and stride=48, we process: 0-47, 48-95, 96-143, 144-191, 192-239, then 240-255 (partial)
+        # For simplicity, we require batch_size to be divisible by stride, or handle partial batches
+        stride = N_PARALLEL * VLEN
+        assert batch_size % VLEN == 0, f"batch_size must be divisible by VLEN ({VLEN})"
+
         for round in range(rounds):
-            for base_i in range(0, batch_size, VLEN):
-                base_i_const = self.scratch_const(base_i)
+            for base_i in range(0, batch_size, stride):
+                # Calculate how many parallel streams we can use for this iteration
+                remaining = batch_size - base_i
+                n_active = min(N_PARALLEL, (remaining + VLEN - 1) // VLEN)
 
-                # Compute base addresses for this vector group
-                # idx_base_addr = inp_indices_p + base_i
-                # val_base_addr = inp_values_p + base_i
-                body.append({
-                    "alu": [
-                        ("+", idx_base_addr, self.scratch["inp_indices_p"], base_i_const),
-                        ("+", val_base_addr, self.scratch["inp_values_p"], base_i_const)
-                    ]
-                })
+                # Compute base addresses for active parallel streams (use scalar ALU, up to 12 slots)
+                alu_slots = []
+                for p in range(n_active):
+                    offset = base_i + p * VLEN
+                    offset_const = self.scratch_const(offset)
+                    alu_slots.append(("+", idx_base_addrs[p], self.scratch["inp_indices_p"], offset_const))
+                    alu_slots.append(("+", val_base_addrs[p], self.scratch["inp_values_p"], offset_const))
+                body.append({"alu": alu_slots})
 
-                # Vector load indices and values (contiguous)
-                body.append({
-                    "load": [
-                        ("vload", v_idx, idx_base_addr),
-                        ("vload", v_val, val_base_addr)
-                    ]
-                })
+                # Vector load indices and values (2 load slots per cycle)
+                for p in range(n_active):
+                    body.append({"load": [
+                        ("vload", v_idx[p], idx_base_addrs[p]),
+                        ("vload", v_val[p], val_base_addrs[p]),
+                    ]})
 
                 # Debug compare for indices and values
-                body.append(("debug", ("vcompare", v_idx,
-                    tuple((round, base_i + vi, "idx") for vi in range(VLEN)))))
-                body.append(("debug", ("vcompare", v_val,
-                    tuple((round, base_i + vi, "val") for vi in range(VLEN)))))
+                for p in range(n_active):
+                    offset = base_i + p * VLEN
+                    body.append(("debug", ("vcompare", v_idx[p],
+                        tuple((round, offset + vi, "idx") for vi in range(VLEN)))))
+                    body.append(("debug", ("vcompare", v_val[p],
+                        tuple((round, offset + vi, "val") for vi in range(VLEN)))))
 
                 # Gather node_val = mem[forest_values_p + idx[i]] for each element
-                # This requires scalar loads since indices are non-contiguous
+                # Use all 12 scalar ALU slots to compute addresses, then load
+                # We have 8 elements per vector * n_active vectors gathers
+                # With 12 ALU slots and 2 load slots per cycle, this is the bottleneck
                 for vi in range(VLEN):
-                    # tmp_addr = forest_values_p + v_idx[vi]
-                    body.append(("alu", ("+", tmp_addr, self.scratch["forest_values_p"], v_idx + vi)))
-                    body.append(("load", ("load", v_node_val + vi, tmp_addr)))
+                    # Compute all n_active addresses in parallel (up to 12 ALU slots)
+                    alu_slots = []
+                    for p in range(n_active):
+                        alu_slots.append(("+", tmp_addrs[p], self.scratch["forest_values_p"], v_idx[p] + vi))
+                    body.append({"alu": alu_slots})
 
-                body.append(("debug", ("vcompare", v_node_val,
-                    tuple((round, base_i + vi, "node_val") for vi in range(VLEN)))))
+                    # Load 2 at a time (2 load slots)
+                    for p in range(0, n_active, 2):
+                        load_slots = [("load", v_node_val[p] + vi, tmp_addrs[p])]
+                        if p + 1 < n_active:
+                            load_slots.append(("load", v_node_val[p+1] + vi, tmp_addrs[p+1]))
+                        body.append({"load": load_slots})
 
-                # val = myhash(val ^ node_val) - vectorized
-                body.append(("valu", ("^", v_val, v_val, v_node_val)))
-                body.extend(self.build_hash_vec(v_val, v_tmp1, v_tmp2, hash_const_vecs, round, base_i))
+                # Debug compare for node_val
+                for p in range(n_active):
+                    offset = base_i + p * VLEN
+                    body.append(("debug", ("vcompare", v_node_val[p],
+                        tuple((round, offset + vi, "node_val") for vi in range(VLEN)))))
 
-                body.append(("debug", ("vcompare", v_val,
-                    tuple((round, base_i + vi, "hashed_val") for vi in range(VLEN)))))
-
-                # idx = 2*idx + (1 if val % 2 == 0 else 2) - vectorized
-                body.append(("valu", ("%", v_tmp1, v_val, v_two)))
-                body.append(("valu", ("==", v_tmp1, v_tmp1, v_zero)))
-                body.append(("flow", ("vselect", v_tmp3, v_tmp1, v_one, v_two)))
-                body.append(("valu", ("*", v_idx, v_idx, v_two)))
-                body.append(("valu", ("+", v_idx, v_idx, v_tmp3)))
-
-                body.append(("debug", ("vcompare", v_idx,
-                    tuple((round, base_i + vi, "next_idx") for vi in range(VLEN)))))
-
-                # idx = 0 if idx >= n_nodes else idx - vectorized
-                body.append(("valu", ("<", v_tmp1, v_idx, v_n_nodes)))
-                body.append(("flow", ("vselect", v_idx, v_tmp1, v_idx, v_zero)))
-
-                body.append(("debug", ("vcompare", v_idx,
-                    tuple((round, base_i + vi, "wrapped_idx") for vi in range(VLEN)))))
-
-                # Vector store indices and values back (contiguous)
+                # val = val ^ node_val (up to 6 VALUs in parallel)
                 body.append({
-                    "store": [
-                        ("vstore", idx_base_addr, v_idx),
-                        ("vstore", val_base_addr, v_val)
-                    ]
+                    "valu": [("^", v_val[p], v_val[p], v_node_val[p]) for p in range(n_active)]
                 })
+
+                # Hash computation - process all n_active vectors through each hash stage
+                for hi, (op1, val1, op2, op3, val3) in enumerate(HASH_STAGES):
+                    val1_vec, val3_vec = hash_const_vecs[hi]
+                    val1_const = self.scratch_const(val1)
+                    val3_const = self.scratch_const(val3)
+
+                    # Broadcast constants (only need to do once per stage)
+                    body.append({
+                        "valu": [
+                            ("vbroadcast", val1_vec, val1_const),
+                            ("vbroadcast", val3_vec, val3_const),
+                        ]
+                    })
+
+                    # tmp1[p] = op1(v_val[p], val1_vec) for all active p
+                    body.append({
+                        "valu": [(op1, v_tmp1[p], v_val[p], val1_vec) for p in range(n_active)]
+                    })
+
+                    # tmp2[p] = op3(v_val[p], val3_vec) for all active p
+                    body.append({
+                        "valu": [(op3, v_tmp2[p], v_val[p], val3_vec) for p in range(n_active)]
+                    })
+
+                    # v_val[p] = op2(tmp1[p], tmp2[p]) for all active p
+                    body.append({
+                        "valu": [(op2, v_val[p], v_tmp1[p], v_tmp2[p]) for p in range(n_active)]
+                    })
+
+                    # Debug compare
+                    for p in range(n_active):
+                        offset = base_i + p * VLEN
+                        body.append(("debug", ("vcompare", v_val[p],
+                            tuple((round, offset + vi, "hash_stage", hi) for vi in range(VLEN)))))
+
+                # Debug compare for hashed_val
+                for p in range(n_active):
+                    offset = base_i + p * VLEN
+                    body.append(("debug", ("vcompare", v_val[p],
+                        tuple((round, offset + vi, "hashed_val") for vi in range(VLEN)))))
+
+                # idx = 2*idx + (1 if val % 2 == 0 else 2) - all n_active vectors in parallel
+                # tmp1 = val % 2
+                body.append({
+                    "valu": [("%", v_tmp1[p], v_val[p], v_two) for p in range(n_active)]
+                })
+                # tmp1 = (tmp1 == 0)
+                body.append({
+                    "valu": [("==", v_tmp1[p], v_tmp1[p], v_zero) for p in range(n_active)]
+                })
+                # tmp3 = select(tmp1, 1, 2) - only 1 flow slot, so sequential
+                for p in range(n_active):
+                    body.append(("flow", ("vselect", v_tmp3[p], v_tmp1[p], v_one, v_two)))
+                # idx = idx * 2
+                body.append({
+                    "valu": [("*", v_idx[p], v_idx[p], v_two) for p in range(n_active)]
+                })
+                # idx = idx + tmp3
+                body.append({
+                    "valu": [("+", v_idx[p], v_idx[p], v_tmp3[p]) for p in range(n_active)]
+                })
+
+                # Debug compare for next_idx
+                for p in range(n_active):
+                    offset = base_i + p * VLEN
+                    body.append(("debug", ("vcompare", v_idx[p],
+                        tuple((round, offset + vi, "next_idx") for vi in range(VLEN)))))
+
+                # idx = 0 if idx >= n_nodes else idx
+                # tmp1 = idx < n_nodes
+                body.append({
+                    "valu": [("<", v_tmp1[p], v_idx[p], v_n_nodes) for p in range(n_active)]
+                })
+                # idx = select(tmp1, idx, 0) - only 1 flow slot, so sequential
+                for p in range(n_active):
+                    body.append(("flow", ("vselect", v_idx[p], v_tmp1[p], v_idx[p], v_zero)))
+
+                # Debug compare for wrapped_idx
+                for p in range(n_active):
+                    offset = base_i + p * VLEN
+                    body.append(("debug", ("vcompare", v_idx[p],
+                        tuple((round, offset + vi, "wrapped_idx") for vi in range(VLEN)))))
+
+                # Vector store indices and values back (2 stores per cycle)
+                for p in range(n_active):
+                    body.append({"store": [
+                        ("vstore", idx_base_addrs[p], v_idx[p]),
+                        ("vstore", val_base_addrs[p], v_val[p]),
+                    ]})
 
         body_instrs = self.build(body)
         self.instrs.extend(body_instrs)
