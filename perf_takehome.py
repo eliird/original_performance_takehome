@@ -465,8 +465,20 @@ class KernelBuilder:
             c2_vec = self.alloc_scratch(f"hash_c2_{hi}", VLEN)
             hash_vecs.append((c1_vec, c2_vec))
 
+        # === Round 0 optimization: all indices start at 0, so all read tree[0] ===
+        # We load the root node value once and broadcast it instead of doing scatter gathers
+        root_node_val = self.alloc_scratch("root_node_val")
+        v_root_node_val = self.alloc_scratch("v_root_node_val", VLEN)
+
         # === Main loop body ===
         body = []
+
+        # Load root node value: mem[forest_values_p + 0] = mem[forest_values_p]
+        # forest_values_p already contains the address, so we can load directly from it
+        body.append({"load": [("load", root_node_val, self.scratch["forest_values_p"])]})
+
+        # Broadcast root node value to vector for Round 0
+        body.append({"valu": [("vbroadcast", v_root_node_val, root_node_val)]})
 
         # Broadcast basic constants
         body.append({"valu": [("vbroadcast", v_zero, zero_const), ("vbroadcast", v_two, two_const),
@@ -602,19 +614,8 @@ class KernelBuilder:
                         valu_idx += 1
                     iter_body.append(bundle)
 
-            # === Phase 1: Gather current (remaining VALU already consumed above) ===
-            # Compute first gather address, overlapped with any remaining VALU
-            first_gather_bundle = {
-                "alu": [("+", tmp_addrs_0[q], self.scratch["forest_values_p"], cur_v_idx[q] + 0)
-                        for q in range(n_active)]
-            }
-            if valu_idx < len(valu_ops_for_vload):
-                first_gather_bundle["valu"] = valu_ops_for_vload[valu_idx]
-                valu_idx += 1
-            iter_body.append(first_gather_bundle)
-            precomputed_gather_addrs = 1
-
-            # Build next iteration's vload address ops (to be interleaved during gather)
+            # === Phase 1: Gather current OR broadcast for Round 0 ===
+            # Build next iteration's vload address ops (to be interleaved during gather/broadcast)
             next_vload_alu_ops = []
             if next_iter:
                 _, next_base_i, next_n_active = next_iter
@@ -631,13 +632,61 @@ class KernelBuilder:
             else:
                 next_vload_addrs_ready = False
 
-            # Gather with remaining VALU ops interleaved, AND next vload address computation
             remaining_valu = valu_ops_for_vload[valu_idx:] if valu_idx < len(valu_ops_for_vload) else []
-            iter_body.extend(self.build_gather_with_remaining_valu(
-                cur_v_idx, cur_node_val, tmp_addrs, n_active,
-                remaining_valu, precomputed_gather_addrs,
-                next_vload_alu_ops
-            ))
+
+            if rnd == 0:
+                # === Round 0 optimization: all indices are 0, broadcast root value ===
+                # Instead of 24 scatter loads, we copy the pre-broadcast v_root_node_val
+                # to each cur_node_val[p]. We use valu with + 0 to copy vectors.
+                #
+                # We can do up to 6 valu ops per cycle. We have n_active vectors to fill.
+                # Also interleave remaining VALU ops and next vload ALU ops.
+
+                valu_copy_ops = []
+                for p in range(n_active):
+                    # Copy v_root_node_val to cur_node_val[p] using add with zero
+                    valu_copy_ops.append(("+", cur_node_val[p], v_root_node_val, v_zero))
+
+                # Combine: copy ops + remaining VALU ops
+                all_valu_ops = []
+                # First, emit the copy ops (can fit 6 per cycle)
+                for i in range(0, len(valu_copy_ops), 6):
+                    all_valu_ops.append(valu_copy_ops[i:i+6])
+                # Then remaining VALU
+                all_valu_ops.extend(remaining_valu)
+
+                # Emit bundles interleaving VALU with next vload ALU ops
+                next_alu_idx = 0
+                for valu_op in all_valu_ops:
+                    bundle = {"valu": valu_op}
+                    if next_alu_idx < len(next_vload_alu_ops):
+                        bundle["alu"] = next_vload_alu_ops[next_alu_idx]
+                        next_alu_idx += 1
+                    iter_body.append(bundle)
+
+                # Finish any remaining next vload ALU ops
+                while next_alu_idx < len(next_vload_alu_ops):
+                    iter_body.append({"alu": next_vload_alu_ops[next_alu_idx]})
+                    next_alu_idx += 1
+            else:
+                # === Normal gather for Round 1+ ===
+                # Compute first gather address, overlapped with any remaining VALU
+                first_gather_bundle = {
+                    "alu": [("+", tmp_addrs_0[q], self.scratch["forest_values_p"], cur_v_idx[q] + 0)
+                            for q in range(n_active)]
+                }
+                if remaining_valu:
+                    first_gather_bundle["valu"] = remaining_valu[0]
+                    remaining_valu = remaining_valu[1:]
+                iter_body.append(first_gather_bundle)
+                precomputed_gather_addrs = 1
+
+                # Gather with remaining VALU ops interleaved, AND next vload address computation
+                iter_body.extend(self.build_gather_with_remaining_valu(
+                    cur_v_idx, cur_node_val, tmp_addrs, n_active,
+                    remaining_valu, precomputed_gather_addrs,
+                    next_vload_alu_ops
+                ))
 
             # Update pipeline state
             # Note: The VALU work for the OLD pipeline[1] (i-1) was done during THIS iteration.
