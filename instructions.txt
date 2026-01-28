@@ -2119,595 +2119,487 @@ Resource usage:
  1797 |     vloadx2     |     vstorex2    |                 |       >>x2      |                
  1798 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
  1799 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
- 1800 |                 |                 |       +x6       |       +x2       |                
- 1801 |      loadx2     |                 |       +x6       |       <<x2      |                
- 1802 |      loadx2     |                 |       +x12      |       ^x2       |                
- 1803 |      loadx2     |                 |                 |  multiply_addx2 |                
- 1804 |      loadx2     |                 |       +x6       |       ^x2       |                
- 1805 |      loadx2     |                 |                 |       >>x2      |                
- 1806 |      loadx2     |                 |                 |       ^x2       |                
- 1807 |      loadx2     |                 |       +x6       |       %x2       |                
- 1808 |      loadx2     |                 |                 |       ==x2      |                
- 1809 |      loadx2     |                 |                 |       -x2       |                
- 1810 |      loadx2     |                 |       +x6       |  multiply_addx2 |                
- 1811 |      loadx2     |                 |                 |       <x2       |                
- 1812 |      loadx2     |                 |                 |       *x2       |                
- 1813 |      loadx2     |                 |       +x6       |                 |                
- 1814 |      loadx2     |                 |                 |                 |                
- 1815 |      loadx2     |                 |                 |                 |                
- 1816 |      loadx2     |                 |       +x6       |                 |                
- 1817 |      loadx2     |                 |                 |                 |                
- 1818 |      loadx2     |                 |                 |                 |                
- 1819 |      loadx2     |                 |       +x6       |                 |                
- 1820 |      loadx2     |                 |                 |                 |                
- 1821 |      loadx2     |                 |                 |                 |                
- 1822 |      loadx2     |                 |                 |                 |                
- 1823 |      loadx2     |                 |                 |                 |                
- 1824 |      loadx2     |                 |                 |                 |                
+ 1800 |                 |                 |       +x12      |       +x6       |                
+ 1801 |                 |                 |                 |       +x2       |                
+ 1802 |                 |                 |                 |       <<x2      |                
+ 1803 |                 |                 |                 |       ^x2       |                
+ 1804 |                 |                 |                 |  multiply_addx2 |                
+ 1805 |                 |                 |                 |       ^x2       |                
+ 1806 |                 |                 |                 |       >>x2      |                
+ 1807 |                 |                 |                 |       ^x2       |                
+ 1808 |                 |                 |                 |       %x2       |                
+ 1809 |                 |                 |                 |       ==x2      |                
+ 1810 |                 |                 |                 |       -x2       |                
+ 1811 |                 |                 |                 |  multiply_addx2 |                
+ 1812 |                 |                 |                 |       <x2       |                
+ 1813 |                 |                 |                 |       *x2       |                
 
---- Iter 66 (batch 0): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
+--- Iter 66 (batch 0): 20 cycles | LOAD:30% STORE:30% ALU:5% VALU:100% ---
 
- 1825 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 1826 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 1827 |     vloadx2     |                 |                 |       ^x6       |                
- 1828 |     vloadx2     |                 |                 |       >>x6      |                
- 1829 |     vloadx2     |                 |                 |       ^x6       |                
- 1830 |     vloadx2     |                 |                 |  multiply_addx6 |                
- 1831 |                 |                 |       +x6       |       +x6       |                
- 1832 |      loadx2     |                 |       +x6       |       <<x6      |                
- 1833 |      loadx2     |                 |       +x12      |       ^x6       |                
- 1834 |      loadx2     |                 |                 |  multiply_addx6 |                
- 1835 |      loadx2     |                 |       +x6       |       ^x6       |                
- 1836 |      loadx2     |                 |                 |       >>x6      |                
- 1837 |      loadx2     |                 |                 |       ^x6       |                
- 1838 |      loadx2     |                 |       +x6       |       %x6       |                
- 1839 |      loadx2     |                 |                 |       ==x6      |                
- 1840 |      loadx2     |                 |                 |       -x6       |                
- 1841 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 1842 |      loadx2     |                 |                 |       <x6       |                
- 1843 |      loadx2     |                 |                 |       *x6       |                
- 1844 |      loadx2     |                 |       +x6       |                 |                
- 1845 |      loadx2     |                 |                 |                 |                
- 1846 |      loadx2     |                 |                 |                 |                
- 1847 |      loadx2     |                 |       +x6       |                 |                
- 1848 |      loadx2     |                 |                 |                 |                
- 1849 |      loadx2     |                 |                 |                 |                
- 1850 |      loadx2     |                 |       +x6       |                 |                
- 1851 |      loadx2     |                 |                 |                 |                
- 1852 |      loadx2     |                 |                 |                 |                
- 1853 |      loadx2     |                 |                 |                 |                
- 1854 |      loadx2     |                 |                 |                 |                
- 1855 |      loadx2     |                 |                 |                 |                
+ 1814 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1815 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1816 |     vloadx2     |                 |                 |       ^x6       |                
+ 1817 |     vloadx2     |                 |                 |       >>x6      |                
+ 1818 |     vloadx2     |                 |                 |       ^x6       |                
+ 1819 |     vloadx2     |                 |                 |  multiply_addx6 |                
+ 1820 |                 |                 |       +x12      |       +x6       |                
+ 1821 |                 |                 |                 |       +x6       |                
+ 1822 |                 |                 |                 |       <<x6      |                
+ 1823 |                 |                 |                 |       ^x6       |                
+ 1824 |                 |                 |                 |  multiply_addx6 |                
+ 1825 |                 |                 |                 |       ^x6       |                
+ 1826 |                 |                 |                 |       >>x6      |                
+ 1827 |                 |                 |                 |       ^x6       |                
+ 1828 |                 |                 |                 |       %x6       |                
+ 1829 |                 |                 |                 |       ==x6      |                
+ 1830 |                 |                 |                 |       -x6       |                
+ 1831 |                 |                 |                 |  multiply_addx6 |                
+ 1832 |                 |                 |                 |       <x6       |                
+ 1833 |                 |                 |                 |       *x6       |                
 
---- Iter 67 (batch 48): 31 cycles | LOAD:97% STORE:6% ALU:29% VALU:61% ---
+--- Iter 67 (batch 48): 20 cycles | LOAD:30% STORE:10% ALU:5% VALU:100% ---
 
+ 1834 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1835 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1836 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1837 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 1838 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1839 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1840 |                 |                 |       +x12      |       +x6       |                
+ 1841 |                 |                 |                 |       +x6       |                
+ 1842 |                 |                 |                 |       <<x6      |                
+ 1843 |                 |                 |                 |       ^x6       |                
+ 1844 |                 |                 |                 |  multiply_addx6 |                
+ 1845 |                 |                 |                 |       ^x6       |                
+ 1846 |                 |                 |                 |       >>x6      |                
+ 1847 |                 |                 |                 |       ^x6       |                
+ 1848 |                 |                 |                 |       %x6       |                
+ 1849 |                 |                 |                 |       ==x6      |                
+ 1850 |                 |                 |                 |       -x6       |                
+ 1851 |                 |                 |                 |  multiply_addx6 |                
+ 1852 |                 |                 |                 |       <x6       |                
+ 1853 |                 |                 |                 |       *x6       |                
+
+--- Iter 68 (batch 96): 20 cycles | LOAD:30% STORE:30% ALU:5% VALU:100% ---
+
+ 1854 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1855 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
  1856 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 1857 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1857 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
  1858 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 1859 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 1860 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 1861 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 1862 |                 |                 |       +x6       |       +x6       |                
- 1863 |      loadx2     |                 |       +x6       |       <<x6      |                
- 1864 |      loadx2     |                 |       +x12      |       ^x6       |                
- 1865 |      loadx2     |                 |                 |  multiply_addx6 |                
- 1866 |      loadx2     |                 |       +x6       |       ^x6       |                
- 1867 |      loadx2     |                 |                 |       >>x6      |                
- 1868 |      loadx2     |                 |                 |       ^x6       |                
- 1869 |      loadx2     |                 |       +x6       |       %x6       |                
- 1870 |      loadx2     |                 |                 |       ==x6      |                
- 1871 |      loadx2     |                 |                 |       -x6       |                
- 1872 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 1873 |      loadx2     |                 |                 |       <x6       |                
- 1874 |      loadx2     |                 |                 |       *x6       |                
- 1875 |      loadx2     |                 |       +x6       |                 |                
- 1876 |      loadx2     |                 |                 |                 |                
- 1877 |      loadx2     |                 |                 |                 |                
- 1878 |      loadx2     |                 |       +x6       |                 |                
- 1879 |      loadx2     |                 |                 |                 |                
- 1880 |      loadx2     |                 |                 |                 |                
- 1881 |      loadx2     |                 |       +x6       |                 |                
- 1882 |      loadx2     |                 |                 |                 |                
- 1883 |      loadx2     |                 |                 |                 |                
- 1884 |      loadx2     |                 |                 |                 |                
- 1885 |      loadx2     |                 |                 |                 |                
- 1886 |      loadx2     |                 |                 |                 |                
+ 1859 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1860 |                 |                 |       +x12      |       +x6       |                
+ 1861 |                 |                 |                 |       +x6       |                
+ 1862 |                 |                 |                 |       <<x6      |                
+ 1863 |                 |                 |                 |       ^x6       |                
+ 1864 |                 |                 |                 |  multiply_addx6 |                
+ 1865 |                 |                 |                 |       ^x6       |                
+ 1866 |                 |                 |                 |       >>x6      |                
+ 1867 |                 |                 |                 |       ^x6       |                
+ 1868 |                 |                 |                 |       %x6       |                
+ 1869 |                 |                 |                 |       ==x6      |                
+ 1870 |                 |                 |                 |       -x6       |                
+ 1871 |                 |                 |                 |  multiply_addx6 |                
+ 1872 |                 |                 |                 |       <x6       |                
+ 1873 |                 |                 |                 |       *x6       |                
 
---- Iter 68 (batch 96): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
+--- Iter 69 (batch 144): 20 cycles | LOAD:30% STORE:30% ALU:5% VALU:100% ---
 
- 1887 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 1888 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 1889 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 1890 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 1891 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 1892 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 1893 |                 |                 |       +x6       |       +x6       |                
- 1894 |      loadx2     |                 |       +x6       |       <<x6      |                
- 1895 |      loadx2     |                 |       +x12      |       ^x6       |                
- 1896 |      loadx2     |                 |                 |  multiply_addx6 |                
- 1897 |      loadx2     |                 |       +x6       |       ^x6       |                
- 1898 |      loadx2     |                 |                 |       >>x6      |                
- 1899 |      loadx2     |                 |                 |       ^x6       |                
- 1900 |      loadx2     |                 |       +x6       |       %x6       |                
- 1901 |      loadx2     |                 |                 |       ==x6      |                
- 1902 |      loadx2     |                 |                 |       -x6       |                
- 1903 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 1904 |      loadx2     |                 |                 |       <x6       |                
- 1905 |      loadx2     |                 |                 |       *x6       |                
- 1906 |      loadx2     |                 |       +x6       |                 |                
- 1907 |      loadx2     |                 |                 |                 |                
- 1908 |      loadx2     |                 |                 |                 |                
- 1909 |      loadx2     |                 |       +x6       |                 |                
- 1910 |      loadx2     |                 |                 |                 |                
- 1911 |      loadx2     |                 |                 |                 |                
- 1912 |      loadx2     |                 |       +x6       |                 |                
- 1913 |      loadx2     |                 |                 |                 |                
- 1914 |      loadx2     |                 |                 |                 |                
- 1915 |      loadx2     |                 |                 |                 |                
- 1916 |      loadx2     |                 |                 |                 |                
- 1917 |      loadx2     |                 |                 |                 |                
+ 1874 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1875 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1876 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1877 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 1878 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1879 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1880 |                 |                 |       +x4       |       +x6       |                
+ 1881 |                 |                 |                 |       +x6       |                
+ 1882 |                 |                 |                 |       <<x6      |                
+ 1883 |                 |                 |                 |       ^x6       |                
+ 1884 |                 |                 |                 |  multiply_addx6 |                
+ 1885 |                 |                 |                 |       ^x6       |                
+ 1886 |                 |                 |                 |       >>x6      |                
+ 1887 |                 |                 |                 |       ^x6       |                
+ 1888 |                 |                 |                 |       %x6       |                
+ 1889 |                 |                 |                 |       ==x6      |                
+ 1890 |                 |                 |                 |       -x6       |                
+ 1891 |                 |                 |                 |  multiply_addx6 |                
+ 1892 |                 |                 |                 |       <x6       |                
+ 1893 |                 |                 |                 |       *x6       |                
 
---- Iter 69 (batch 144): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
+--- Iter 70 (batch 192): 20 cycles | LOAD:30% STORE:30% ALU:5% VALU:100% ---
 
- 1918 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 1919 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 1920 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 1921 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 1922 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 1923 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 1924 |                 |                 |       +x6       |       +x6       |                
- 1925 |      loadx2     |                 |       +x6       |       <<x6      |                
- 1926 |      loadx2     |                 |       +x4       |       ^x6       |                
- 1927 |      loadx2     |                 |                 |  multiply_addx6 |                
- 1928 |      loadx2     |                 |       +x6       |       ^x6       |                
- 1929 |      loadx2     |                 |                 |       >>x6      |                
- 1930 |      loadx2     |                 |                 |       ^x6       |                
- 1931 |      loadx2     |                 |       +x6       |       %x6       |                
- 1932 |      loadx2     |                 |                 |       ==x6      |                
- 1933 |      loadx2     |                 |                 |       -x6       |                
- 1934 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 1935 |      loadx2     |                 |                 |       <x6       |                
- 1936 |      loadx2     |                 |                 |       *x6       |                
- 1937 |      loadx2     |                 |       +x6       |                 |                
- 1938 |      loadx2     |                 |                 |                 |                
- 1939 |      loadx2     |                 |                 |                 |                
- 1940 |      loadx2     |                 |       +x6       |                 |                
- 1941 |      loadx2     |                 |                 |                 |                
- 1942 |      loadx2     |                 |                 |                 |                
- 1943 |      loadx2     |                 |       +x6       |                 |                
- 1944 |      loadx2     |                 |                 |                 |                
- 1945 |      loadx2     |                 |                 |                 |                
- 1946 |      loadx2     |                 |                 |                 |                
- 1947 |      loadx2     |                 |                 |                 |                
- 1948 |      loadx2     |                 |                 |                 |                
+ 1894 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1895 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1896 |                 |     vstorex2    |                 |       ^x6       |                
+ 1897 |                 |     vstorex2    |                 |       >>x6      |                
+ 1898 |                 |     vstorex2    |                 |       ^x6       |                
+ 1899 |                 |     vstorex2    |                 |  multiply_addx6 |                
+ 1900 |                 |                 |       +x12      |       +x2       |                
+ 1901 |                 |                 |                 |       +x6       |                
+ 1902 |                 |                 |                 |       <<x6      |                
+ 1903 |                 |                 |                 |       ^x6       |                
+ 1904 |                 |                 |                 |  multiply_addx6 |                
+ 1905 |                 |                 |                 |       ^x6       |                
+ 1906 |                 |                 |                 |       >>x6      |                
+ 1907 |                 |                 |                 |       ^x6       |                
+ 1908 |                 |                 |                 |       %x6       |                
+ 1909 |                 |                 |                 |       ==x6      |                
+ 1910 |                 |                 |                 |       -x6       |                
+ 1911 |                 |                 |                 |  multiply_addx6 |                
+ 1912 |                 |                 |                 |       <x6       |                
+ 1913 |                 |                 |                 |       *x6       |                
 
---- Iter 70 (batch 192): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
-
- 1949 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 1950 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 1951 |                 |     vstorex2    |                 |       ^x6       |                
- 1952 |                 |     vstorex2    |                 |       >>x6      |                
- 1953 |                 |     vstorex2    |                 |       ^x6       |                
- 1954 |                 |     vstorex2    |                 |  multiply_addx6 |                
- 1955 |                 |                 |       +x2       |       +x6       |                
- 1956 |      loadx2     |                 |       +x2       |       <<x6      |                
- 1957 |      loadx2     |                 |       +x2       |       ^x6       |                
- 1958 |      loadx2     |                 |       +x2       |  multiply_addx6 |                
- 1959 |      loadx2     |                 |       +x2       |       ^x6       |                
- 1960 |      loadx2     |                 |       +x2       |       >>x6      |                
- 1961 |      loadx2     |                 |       +x2       |       ^x6       |                
- 1962 |      loadx2     |                 |       +x2       |       %x6       |                
- 1963 |      loadx2     |                 |       +x12      |       ==x6      |                
- 1964 |                 |                 |                 |       -x6       |                
- 1965 |                 |                 |                 |  multiply_addx6 |                
- 1966 |                 |                 |                 |       <x6       |                
- 1967 |                 |                 |                 |       *x6       |                
-
---- Iter 71 (batch 240): 19 cycles | LOAD:53% STORE:32% ALU:47% VALU:100% ---
+--- Iter 71 (batch 240): 20 cycles | LOAD:10% STORE:30% ALU:5% VALU:100% ---
 
 
 ================================================================================
-=== ROUND 11 COMPLETE: 174 cycles ===
+=== ROUND 11 COMPLETE: 120 cycles ===
 Resource usage:
-  LOAD:  160 cycles ( 92.0%)
-  STORE:   32 cycles ( 18.4%)
-  ALU:   54 cycles ( 31.0%)
-  VALU:  114 cycles ( 65.5%)
+  LOAD:   32 cycles ( 26.7%)
+  STORE:   32 cycles ( 26.7%)
+  ALU:    6 cycles (  5.0%)
+  VALU:  120 cycles (100.0%)
   FLOW:    0 cycles (  0.0%)
 ================================================================================
 
- 1968 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 1969 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
- 1970 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 1971 |     vloadx2     |     vstorex2    |                 |       >>x2      |                
- 1972 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 1973 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
- 1974 |                 |                 |       +x6       |       +x2       |                
- 1975 |      loadx2     |                 |       +x6       |       <<x2      |                
- 1976 |      loadx2     |                 |       +x12      |       ^x2       |                
- 1977 |      loadx2     |                 |                 |  multiply_addx2 |                
- 1978 |      loadx2     |                 |       +x6       |       ^x2       |                
- 1979 |      loadx2     |                 |                 |       >>x2      |                
- 1980 |      loadx2     |                 |                 |       ^x2       |                
- 1981 |      loadx2     |                 |       +x6       |       %x2       |                
- 1982 |      loadx2     |                 |                 |       ==x2      |                
- 1983 |      loadx2     |                 |                 |       -x2       |                
- 1984 |      loadx2     |                 |       +x6       |  multiply_addx2 |                
- 1985 |      loadx2     |                 |                 |       <x2       |                
- 1986 |      loadx2     |                 |                 |       *x2       |                
- 1987 |      loadx2     |                 |       +x6       |                 |                
- 1988 |      loadx2     |                 |                 |                 |                
- 1989 |      loadx2     |                 |                 |                 |                
- 1990 |      loadx2     |                 |       +x6       |                 |                
- 1991 |      loadx2     |                 |                 |                 |                
- 1992 |      loadx2     |                 |                 |                 |                
- 1993 |      loadx2     |                 |       +x6       |                 |                
- 1994 |      loadx2     |                 |                 |                 |                
- 1995 |      loadx2     |                 |                 |                 |                
- 1996 |      loadx2     |                 |                 |                 |                
- 1997 |      loadx2     |                 |                 |                 |                
- 1998 |      loadx2     |                 |                 |                 |                
+ 1914 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 1915 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
+ 1916 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 1917 |     vloadx2     |     vstorex2    |                 |       >>x2      |                
+ 1918 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 1919 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
+ 1920 |                 |                 |       +x12      |       ==x6      |                
+ 1921 |                 |                 |                 |       +x2       |     vselect    
+ 1922 |                 |                 |                 |       <<x2      |     vselect    
+ 1923 |                 |                 |                 |       ^x2       |     vselect    
+ 1924 |                 |                 |                 |  multiply_addx2 |     vselect    
+ 1925 |                 |                 |                 |       ^x2       |     vselect    
+ 1926 |                 |                 |                 |       >>x2      |     vselect    
+ 1927 |                 |                 |                 |       ^x2       |                
+ 1928 |                 |                 |                 |       %x2       |                
+ 1929 |                 |                 |                 |       ==x2      |                
+ 1930 |                 |                 |                 |       -x2       |                
+ 1931 |                 |                 |                 |  multiply_addx2 |                
+ 1932 |                 |                 |                 |       <x2       |                
+ 1933 |                 |                 |                 |       *x2       |                
 
---- Iter 72 (batch 0): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
+--- Iter 72 (batch 0): 20 cycles | LOAD:30% STORE:30% ALU:5% VALU:100% FLOW:30% ---
 
- 1999 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2000 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2001 |     vloadx2     |                 |                 |       ^x6       |                
- 2002 |     vloadx2     |                 |                 |       >>x6      |                
- 2003 |     vloadx2     |                 |                 |       ^x6       |                
- 2004 |     vloadx2     |                 |                 |  multiply_addx6 |                
- 2005 |                 |                 |       +x6       |       +x6       |                
- 2006 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2007 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2008 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2009 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2010 |      loadx2     |                 |                 |       >>x6      |                
- 2011 |      loadx2     |                 |                 |       ^x6       |                
- 2012 |      loadx2     |                 |       +x6       |       %x6       |                
- 2013 |      loadx2     |                 |                 |       ==x6      |                
- 2014 |      loadx2     |                 |                 |       -x6       |                
- 2015 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2016 |      loadx2     |                 |                 |       <x6       |                
- 2017 |      loadx2     |                 |                 |       *x6       |                
- 2018 |      loadx2     |                 |       +x6       |                 |                
- 2019 |      loadx2     |                 |                 |                 |                
- 2020 |      loadx2     |                 |                 |                 |                
- 2021 |      loadx2     |                 |       +x6       |                 |                
- 2022 |      loadx2     |                 |                 |                 |                
- 2023 |      loadx2     |                 |                 |                 |                
- 2024 |      loadx2     |                 |       +x6       |                 |                
- 2025 |      loadx2     |                 |                 |                 |                
- 2026 |      loadx2     |                 |                 |                 |                
- 2027 |      loadx2     |                 |                 |                 |                
- 2028 |      loadx2     |                 |                 |                 |                
- 2029 |      loadx2     |                 |                 |                 |                
+ 1934 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1935 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1936 |     vloadx2     |                 |                 |       ^x6       |                
+ 1937 |     vloadx2     |                 |                 |       >>x6      |                
+ 1938 |     vloadx2     |                 |                 |       ^x6       |                
+ 1939 |     vloadx2     |                 |                 |  multiply_addx6 |                
+ 1940 |                 |                 |       +x12      |       ==x6      |                
+ 1941 |                 |                 |                 |       +x6       |     vselect    
+ 1942 |                 |                 |                 |       <<x6      |     vselect    
+ 1943 |                 |                 |                 |       ^x6       |     vselect    
+ 1944 |                 |                 |                 |  multiply_addx6 |     vselect    
+ 1945 |                 |                 |                 |       ^x6       |     vselect    
+ 1946 |                 |                 |                 |       >>x6      |     vselect    
+ 1947 |                 |                 |                 |       ^x6       |                
+ 1948 |                 |                 |                 |       %x6       |                
+ 1949 |                 |                 |                 |       ==x6      |                
+ 1950 |                 |                 |                 |       -x6       |                
+ 1951 |                 |                 |                 |  multiply_addx6 |                
+ 1952 |                 |                 |                 |       <x6       |                
+ 1953 |                 |                 |                 |       *x6       |                
 
---- Iter 73 (batch 48): 31 cycles | LOAD:97% STORE:6% ALU:29% VALU:61% ---
+--- Iter 73 (batch 48): 20 cycles | LOAD:30% STORE:10% ALU:5% VALU:100% FLOW:30% ---
 
- 2030 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2031 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2032 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2033 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2034 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2035 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2036 |                 |                 |       +x6       |       +x6       |                
- 2037 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2038 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2039 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2040 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2041 |      loadx2     |                 |                 |       >>x6      |                
- 2042 |      loadx2     |                 |                 |       ^x6       |                
- 2043 |      loadx2     |                 |       +x6       |       %x6       |                
- 2044 |      loadx2     |                 |                 |       ==x6      |                
- 2045 |      loadx2     |                 |                 |       -x6       |                
- 2046 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2047 |      loadx2     |                 |                 |       <x6       |                
- 2048 |      loadx2     |                 |                 |       *x6       |                
- 2049 |      loadx2     |                 |       +x6       |                 |                
- 2050 |      loadx2     |                 |                 |                 |                
- 2051 |      loadx2     |                 |                 |                 |                
- 2052 |      loadx2     |                 |       +x6       |                 |                
- 2053 |      loadx2     |                 |                 |                 |                
+ 1954 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1955 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1956 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1957 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 1958 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1959 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1960 |                 |                 |       +x12      |       ==x6      |                
+ 1961 |                 |                 |                 |       +x6       |     vselect    
+ 1962 |                 |                 |                 |       <<x6      |     vselect    
+ 1963 |                 |                 |                 |       ^x6       |     vselect    
+ 1964 |                 |                 |                 |  multiply_addx6 |     vselect    
+ 1965 |                 |                 |                 |       ^x6       |     vselect    
+ 1966 |                 |                 |                 |       >>x6      |     vselect    
+ 1967 |                 |                 |                 |       ^x6       |                
+ 1968 |                 |                 |                 |       %x6       |                
+ 1969 |                 |                 |                 |       ==x6      |                
+ 1970 |                 |                 |                 |       -x6       |                
+ 1971 |                 |                 |                 |  multiply_addx6 |                
+ 1972 |                 |                 |                 |       <x6       |                
+ 1973 |                 |                 |                 |       *x6       |                
+
+--- Iter 74 (batch 96): 20 cycles | LOAD:30% STORE:30% ALU:5% VALU:100% FLOW:30% ---
+
+ 1974 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1975 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1976 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1977 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 1978 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1979 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1980 |                 |                 |       +x12      |       ==x6      |                
+ 1981 |                 |                 |                 |       +x6       |     vselect    
+ 1982 |                 |                 |                 |       <<x6      |     vselect    
+ 1983 |                 |                 |                 |       ^x6       |     vselect    
+ 1984 |                 |                 |                 |  multiply_addx6 |     vselect    
+ 1985 |                 |                 |                 |       ^x6       |     vselect    
+ 1986 |                 |                 |                 |       >>x6      |     vselect    
+ 1987 |                 |                 |                 |       ^x6       |                
+ 1988 |                 |                 |                 |       %x6       |                
+ 1989 |                 |                 |                 |       ==x6      |                
+ 1990 |                 |                 |                 |       -x6       |                
+ 1991 |                 |                 |                 |  multiply_addx6 |                
+ 1992 |                 |                 |                 |       <x6       |                
+ 1993 |                 |                 |                 |       *x6       |                
+
+--- Iter 75 (batch 144): 20 cycles | LOAD:30% STORE:30% ALU:5% VALU:100% FLOW:30% ---
+
+ 1994 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1995 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 1996 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1997 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 1998 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 1999 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2000 |                 |                 |       +x4       |       ==x6      |                
+ 2001 |                 |                 |                 |       +x6       |     vselect    
+ 2002 |                 |                 |                 |       <<x6      |     vselect    
+ 2003 |                 |                 |                 |       ^x6       |     vselect    
+ 2004 |                 |                 |                 |  multiply_addx6 |     vselect    
+ 2005 |                 |                 |                 |       ^x6       |     vselect    
+ 2006 |                 |                 |                 |       >>x6      |     vselect    
+ 2007 |                 |                 |                 |       ^x6       |                
+ 2008 |                 |                 |                 |       %x6       |                
+ 2009 |                 |                 |                 |       ==x6      |                
+ 2010 |                 |                 |                 |       -x6       |                
+ 2011 |                 |                 |                 |  multiply_addx6 |                
+ 2012 |                 |                 |                 |       <x6       |                
+ 2013 |                 |                 |                 |       *x6       |                
+
+--- Iter 76 (batch 192): 20 cycles | LOAD:30% STORE:30% ALU:5% VALU:100% FLOW:30% ---
+
+ 2014 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2015 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2016 |                 |     vstorex2    |                 |       ^x6       |                
+ 2017 |                 |     vstorex2    |                 |       >>x6      |                
+ 2018 |                 |     vstorex2    |                 |       ^x6       |                
+ 2019 |                 |     vstorex2    |                 |  multiply_addx6 |                
+ 2020 |                 |                 |       +x12      |       ==x2      |                
+ 2021 |                 |                 |                 |       +x6       |     vselect    
+ 2022 |                 |                 |                 |       <<x6      |     vselect    
+ 2023 |                 |                 |                 |       ^x6       |                
+ 2024 |                 |                 |                 |  multiply_addx6 |                
+ 2025 |                 |                 |                 |       ^x6       |                
+ 2026 |                 |                 |                 |       >>x6      |                
+ 2027 |                 |                 |                 |       ^x6       |                
+ 2028 |                 |                 |                 |       %x6       |                
+ 2029 |                 |                 |                 |       ==x6      |                
+ 2030 |                 |                 |                 |       -x6       |                
+ 2031 |                 |                 |                 |  multiply_addx6 |                
+ 2032 |                 |                 |                 |       <x6       |                
+ 2033 |                 |                 |                 |       *x6       |                
+
+--- Iter 77 (batch 240): 20 cycles | LOAD:10% STORE:30% ALU:5% VALU:100% FLOW:10% ---
+
+
+================================================================================
+=== ROUND 12 COMPLETE: 120 cycles ===
+Resource usage:
+  LOAD:   32 cycles ( 26.7%)
+  STORE:   32 cycles ( 26.7%)
+  ALU:    6 cycles (  5.0%)
+  VALU:  120 cycles (100.0%)
+  FLOW:   32 cycles ( 26.7%)
+================================================================================
+
+ 2034 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 2035 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
+ 2036 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 2037 |     vloadx2     |     vstorex2    |                 |       >>x2      |                
+ 2038 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 2039 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
+ 2040 |                 |                 |       +x6       |       +x2       |                
+ 2041 |      loadx2     |                 |       +x6       |       <<x2      |                
+ 2042 |      loadx2     |                 |       +x12      |       ^x2       |                
+ 2043 |      loadx2     |                 |                 |  multiply_addx2 |                
+ 2044 |      loadx2     |                 |       +x6       |       ^x2       |                
+ 2045 |      loadx2     |                 |                 |       >>x2      |                
+ 2046 |      loadx2     |                 |                 |       ^x2       |                
+ 2047 |      loadx2     |                 |       +x6       |       %x2       |                
+ 2048 |      loadx2     |                 |                 |       ==x2      |                
+ 2049 |      loadx2     |                 |                 |       -x2       |                
+ 2050 |      loadx2     |                 |       +x6       |  multiply_addx2 |                
+ 2051 |      loadx2     |                 |                 |       <x2       |                
+ 2052 |      loadx2     |                 |                 |       *x2       |                
+ 2053 |      loadx2     |                 |       +x6       |                 |                
  2054 |      loadx2     |                 |                 |                 |                
- 2055 |      loadx2     |                 |       +x6       |                 |                
- 2056 |      loadx2     |                 |                 |                 |                
+ 2055 |      loadx2     |                 |                 |                 |                
+ 2056 |      loadx2     |                 |       +x6       |                 |                
  2057 |      loadx2     |                 |                 |                 |                
  2058 |      loadx2     |                 |                 |                 |                
- 2059 |      loadx2     |                 |                 |                 |                
+ 2059 |      loadx2     |                 |       +x6       |                 |                
  2060 |      loadx2     |                 |                 |                 |                
-
---- Iter 74 (batch 96): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
-
- 2061 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2062 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2063 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2064 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2065 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2066 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2067 |                 |                 |       +x6       |       +x6       |                
- 2068 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2069 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2070 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2071 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2072 |      loadx2     |                 |                 |       >>x6      |                
- 2073 |      loadx2     |                 |                 |       ^x6       |                
- 2074 |      loadx2     |                 |       +x6       |       %x6       |                
- 2075 |      loadx2     |                 |                 |       ==x6      |                
- 2076 |      loadx2     |                 |                 |       -x6       |                
- 2077 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2078 |      loadx2     |                 |                 |       <x6       |                
- 2079 |      loadx2     |                 |                 |       *x6       |                
- 2080 |      loadx2     |                 |       +x6       |                 |                
- 2081 |      loadx2     |                 |                 |                 |                
- 2082 |      loadx2     |                 |                 |                 |                
- 2083 |      loadx2     |                 |       +x6       |                 |                
- 2084 |      loadx2     |                 |                 |                 |                
- 2085 |      loadx2     |                 |                 |                 |                
- 2086 |      loadx2     |                 |       +x6       |                 |                
- 2087 |      loadx2     |                 |                 |                 |                
- 2088 |      loadx2     |                 |                 |                 |                
- 2089 |      loadx2     |                 |                 |                 |                
- 2090 |      loadx2     |                 |                 |                 |                
- 2091 |      loadx2     |                 |                 |                 |                
-
---- Iter 75 (batch 144): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
-
- 2092 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2093 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2094 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2095 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2096 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2097 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2098 |                 |                 |       +x6       |       +x6       |                
- 2099 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2100 |      loadx2     |                 |       +x4       |       ^x6       |                
- 2101 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2102 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2103 |      loadx2     |                 |                 |       >>x6      |                
- 2104 |      loadx2     |                 |                 |       ^x6       |                
- 2105 |      loadx2     |                 |       +x6       |       %x6       |                
- 2106 |      loadx2     |                 |                 |       ==x6      |                
- 2107 |      loadx2     |                 |                 |       -x6       |                
- 2108 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2109 |      loadx2     |                 |                 |       <x6       |                
- 2110 |      loadx2     |                 |                 |       *x6       |                
- 2111 |      loadx2     |                 |       +x6       |                 |                
- 2112 |      loadx2     |                 |                 |                 |                
- 2113 |      loadx2     |                 |                 |                 |                
- 2114 |      loadx2     |                 |       +x6       |                 |                
- 2115 |      loadx2     |                 |                 |                 |                
- 2116 |      loadx2     |                 |                 |                 |                
- 2117 |      loadx2     |                 |       +x6       |                 |                
- 2118 |      loadx2     |                 |                 |                 |                
- 2119 |      loadx2     |                 |                 |                 |                
- 2120 |      loadx2     |                 |                 |                 |                
- 2121 |      loadx2     |                 |                 |                 |                
- 2122 |      loadx2     |                 |                 |                 |                
-
---- Iter 76 (batch 192): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
-
- 2123 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2124 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2125 |                 |     vstorex2    |                 |       ^x6       |                
- 2126 |                 |     vstorex2    |                 |       >>x6      |                
- 2127 |                 |     vstorex2    |                 |       ^x6       |                
- 2128 |                 |     vstorex2    |                 |  multiply_addx6 |                
- 2129 |                 |                 |       +x2       |       +x6       |                
- 2130 |      loadx2     |                 |       +x2       |       <<x6      |                
- 2131 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2132 |      loadx2     |                 |       +x2       |  multiply_addx6 |                
- 2133 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2134 |      loadx2     |                 |       +x2       |       >>x6      |                
- 2135 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2136 |      loadx2     |                 |       +x2       |       %x6       |                
- 2137 |      loadx2     |                 |       +x12      |       ==x6      |                
- 2138 |                 |                 |                 |       -x6       |                
- 2139 |                 |                 |                 |  multiply_addx6 |                
- 2140 |                 |                 |                 |       <x6       |                
- 2141 |                 |                 |                 |       *x6       |                
-
---- Iter 77 (batch 240): 19 cycles | LOAD:53% STORE:32% ALU:47% VALU:100% ---
-
-
-================================================================================
-=== ROUND 12 COMPLETE: 174 cycles ===
-Resource usage:
-  LOAD:  160 cycles ( 92.0%)
-  STORE:   32 cycles ( 18.4%)
-  ALU:   54 cycles ( 31.0%)
-  VALU:  114 cycles ( 65.5%)
-  FLOW:    0 cycles (  0.0%)
-================================================================================
-
- 2142 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 2143 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
- 2144 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 2145 |     vloadx2     |     vstorex2    |                 |       >>x2      |                
- 2146 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 2147 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
- 2148 |                 |                 |       +x6       |       +x2       |                
- 2149 |      loadx2     |                 |       +x6       |       <<x2      |                
- 2150 |      loadx2     |                 |       +x12      |       ^x2       |                
- 2151 |      loadx2     |                 |                 |  multiply_addx2 |                
- 2152 |      loadx2     |                 |       +x6       |       ^x2       |                
- 2153 |      loadx2     |                 |                 |       >>x2      |                
- 2154 |      loadx2     |                 |                 |       ^x2       |                
- 2155 |      loadx2     |                 |       +x6       |       %x2       |                
- 2156 |      loadx2     |                 |                 |       ==x2      |                
- 2157 |      loadx2     |                 |                 |       -x2       |                
- 2158 |      loadx2     |                 |       +x6       |  multiply_addx2 |                
- 2159 |      loadx2     |                 |                 |       <x2       |                
- 2160 |      loadx2     |                 |                 |       *x2       |                
- 2161 |      loadx2     |                 |       +x6       |                 |                
- 2162 |      loadx2     |                 |                 |                 |                
- 2163 |      loadx2     |                 |                 |                 |                
- 2164 |      loadx2     |                 |       +x6       |                 |                
- 2165 |      loadx2     |                 |                 |                 |                
- 2166 |      loadx2     |                 |                 |                 |                
- 2167 |      loadx2     |                 |       +x6       |                 |                
- 2168 |      loadx2     |                 |                 |                 |                
- 2169 |      loadx2     |                 |                 |                 |                
- 2170 |      loadx2     |                 |                 |                 |                
- 2171 |      loadx2     |                 |                 |                 |                
- 2172 |      loadx2     |                 |                 |                 |                
+ 2061 |      loadx2     |                 |                 |                 |                
+ 2062 |      loadx2     |                 |                 |                 |                
+ 2063 |      loadx2     |                 |                 |                 |                
+ 2064 |      loadx2     |                 |                 |                 |                
 
 --- Iter 78 (batch 0): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2173 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2174 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2175 |     vloadx2     |                 |                 |       ^x6       |                
- 2176 |     vloadx2     |                 |                 |       >>x6      |                
- 2177 |     vloadx2     |                 |                 |       ^x6       |                
- 2178 |     vloadx2     |                 |                 |  multiply_addx6 |                
- 2179 |                 |                 |       +x6       |       +x6       |                
- 2180 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2181 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2182 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2183 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2184 |      loadx2     |                 |                 |       >>x6      |                
- 2185 |      loadx2     |                 |                 |       ^x6       |                
- 2186 |      loadx2     |                 |       +x6       |       %x6       |                
- 2187 |      loadx2     |                 |                 |       ==x6      |                
- 2188 |      loadx2     |                 |                 |       -x6       |                
- 2189 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2190 |      loadx2     |                 |                 |       <x6       |                
- 2191 |      loadx2     |                 |                 |       *x6       |                
- 2192 |      loadx2     |                 |       +x6       |                 |                
- 2193 |      loadx2     |                 |                 |                 |                
- 2194 |      loadx2     |                 |                 |                 |                
- 2195 |      loadx2     |                 |       +x6       |                 |                
- 2196 |      loadx2     |                 |                 |                 |                
- 2197 |      loadx2     |                 |                 |                 |                
- 2198 |      loadx2     |                 |       +x6       |                 |                
- 2199 |      loadx2     |                 |                 |                 |                
- 2200 |      loadx2     |                 |                 |                 |                
- 2201 |      loadx2     |                 |                 |                 |                
- 2202 |      loadx2     |                 |                 |                 |                
- 2203 |      loadx2     |                 |                 |                 |                
+ 2065 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2066 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2067 |     vloadx2     |                 |                 |       ^x6       |                
+ 2068 |     vloadx2     |                 |                 |       >>x6      |                
+ 2069 |     vloadx2     |                 |                 |       ^x6       |                
+ 2070 |     vloadx2     |                 |                 |  multiply_addx6 |                
+ 2071 |                 |                 |       +x6       |       +x6       |                
+ 2072 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2073 |      loadx2     |                 |       +x12      |       ^x6       |                
+ 2074 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2075 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2076 |      loadx2     |                 |                 |       >>x6      |                
+ 2077 |      loadx2     |                 |                 |       ^x6       |                
+ 2078 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2079 |      loadx2     |                 |                 |       ==x6      |                
+ 2080 |      loadx2     |                 |                 |       -x6       |                
+ 2081 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2082 |      loadx2     |                 |                 |       <x6       |                
+ 2083 |      loadx2     |                 |                 |       *x6       |                
+ 2084 |      loadx2     |                 |       +x6       |                 |                
+ 2085 |      loadx2     |                 |                 |                 |                
+ 2086 |      loadx2     |                 |                 |                 |                
+ 2087 |      loadx2     |                 |       +x6       |                 |                
+ 2088 |      loadx2     |                 |                 |                 |                
+ 2089 |      loadx2     |                 |                 |                 |                
+ 2090 |      loadx2     |                 |       +x6       |                 |                
+ 2091 |      loadx2     |                 |                 |                 |                
+ 2092 |      loadx2     |                 |                 |                 |                
+ 2093 |      loadx2     |                 |                 |                 |                
+ 2094 |      loadx2     |                 |                 |                 |                
+ 2095 |      loadx2     |                 |                 |                 |                
 
 --- Iter 79 (batch 48): 31 cycles | LOAD:97% STORE:6% ALU:29% VALU:61% ---
 
- 2204 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2205 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2206 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2207 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2208 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2209 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2210 |                 |                 |       +x6       |       +x6       |                
- 2211 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2212 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2213 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2214 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2215 |      loadx2     |                 |                 |       >>x6      |                
- 2216 |      loadx2     |                 |                 |       ^x6       |                
- 2217 |      loadx2     |                 |       +x6       |       %x6       |                
- 2218 |      loadx2     |                 |                 |       ==x6      |                
- 2219 |      loadx2     |                 |                 |       -x6       |                
- 2220 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2221 |      loadx2     |                 |                 |       <x6       |                
- 2222 |      loadx2     |                 |                 |       *x6       |                
- 2223 |      loadx2     |                 |       +x6       |                 |                
- 2224 |      loadx2     |                 |                 |                 |                
- 2225 |      loadx2     |                 |                 |                 |                
- 2226 |      loadx2     |                 |       +x6       |                 |                
- 2227 |      loadx2     |                 |                 |                 |                
- 2228 |      loadx2     |                 |                 |                 |                
- 2229 |      loadx2     |                 |       +x6       |                 |                
- 2230 |      loadx2     |                 |                 |                 |                
- 2231 |      loadx2     |                 |                 |                 |                
- 2232 |      loadx2     |                 |                 |                 |                
- 2233 |      loadx2     |                 |                 |                 |                
- 2234 |      loadx2     |                 |                 |                 |                
+ 2096 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2097 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2098 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2099 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 2100 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2101 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2102 |                 |                 |       +x6       |       +x6       |                
+ 2103 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2104 |      loadx2     |                 |       +x12      |       ^x6       |                
+ 2105 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2106 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2107 |      loadx2     |                 |                 |       >>x6      |                
+ 2108 |      loadx2     |                 |                 |       ^x6       |                
+ 2109 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2110 |      loadx2     |                 |                 |       ==x6      |                
+ 2111 |      loadx2     |                 |                 |       -x6       |                
+ 2112 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2113 |      loadx2     |                 |                 |       <x6       |                
+ 2114 |      loadx2     |                 |                 |       *x6       |                
+ 2115 |      loadx2     |                 |       +x6       |                 |                
+ 2116 |      loadx2     |                 |                 |                 |                
+ 2117 |      loadx2     |                 |                 |                 |                
+ 2118 |      loadx2     |                 |       +x6       |                 |                
+ 2119 |      loadx2     |                 |                 |                 |                
+ 2120 |      loadx2     |                 |                 |                 |                
+ 2121 |      loadx2     |                 |       +x6       |                 |                
+ 2122 |      loadx2     |                 |                 |                 |                
+ 2123 |      loadx2     |                 |                 |                 |                
+ 2124 |      loadx2     |                 |                 |                 |                
+ 2125 |      loadx2     |                 |                 |                 |                
+ 2126 |      loadx2     |                 |                 |                 |                
 
 --- Iter 80 (batch 96): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2235 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2236 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2237 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2238 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2239 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2240 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2241 |                 |                 |       +x6       |       +x6       |                
- 2242 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2243 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2244 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2245 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2246 |      loadx2     |                 |                 |       >>x6      |                
- 2247 |      loadx2     |                 |                 |       ^x6       |                
- 2248 |      loadx2     |                 |       +x6       |       %x6       |                
- 2249 |      loadx2     |                 |                 |       ==x6      |                
- 2250 |      loadx2     |                 |                 |       -x6       |                
- 2251 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2252 |      loadx2     |                 |                 |       <x6       |                
- 2253 |      loadx2     |                 |                 |       *x6       |                
- 2254 |      loadx2     |                 |       +x6       |                 |                
- 2255 |      loadx2     |                 |                 |                 |                
- 2256 |      loadx2     |                 |                 |                 |                
- 2257 |      loadx2     |                 |       +x6       |                 |                
- 2258 |      loadx2     |                 |                 |                 |                
- 2259 |      loadx2     |                 |                 |                 |                
- 2260 |      loadx2     |                 |       +x6       |                 |                
- 2261 |      loadx2     |                 |                 |                 |                
- 2262 |      loadx2     |                 |                 |                 |                
- 2263 |      loadx2     |                 |                 |                 |                
- 2264 |      loadx2     |                 |                 |                 |                
- 2265 |      loadx2     |                 |                 |                 |                
+ 2127 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2128 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2129 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2130 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 2131 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2132 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2133 |                 |                 |       +x6       |       +x6       |                
+ 2134 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2135 |      loadx2     |                 |       +x12      |       ^x6       |                
+ 2136 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2137 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2138 |      loadx2     |                 |                 |       >>x6      |                
+ 2139 |      loadx2     |                 |                 |       ^x6       |                
+ 2140 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2141 |      loadx2     |                 |                 |       ==x6      |                
+ 2142 |      loadx2     |                 |                 |       -x6       |                
+ 2143 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2144 |      loadx2     |                 |                 |       <x6       |                
+ 2145 |      loadx2     |                 |                 |       *x6       |                
+ 2146 |      loadx2     |                 |       +x6       |                 |                
+ 2147 |      loadx2     |                 |                 |                 |                
+ 2148 |      loadx2     |                 |                 |                 |                
+ 2149 |      loadx2     |                 |       +x6       |                 |                
+ 2150 |      loadx2     |                 |                 |                 |                
+ 2151 |      loadx2     |                 |                 |                 |                
+ 2152 |      loadx2     |                 |       +x6       |                 |                
+ 2153 |      loadx2     |                 |                 |                 |                
+ 2154 |      loadx2     |                 |                 |                 |                
+ 2155 |      loadx2     |                 |                 |                 |                
+ 2156 |      loadx2     |                 |                 |                 |                
+ 2157 |      loadx2     |                 |                 |                 |                
 
 --- Iter 81 (batch 144): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2266 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2267 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2268 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2269 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2270 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2271 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2272 |                 |                 |       +x6       |       +x6       |                
- 2273 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2274 |      loadx2     |                 |       +x4       |       ^x6       |                
- 2275 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2276 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2277 |      loadx2     |                 |                 |       >>x6      |                
- 2278 |      loadx2     |                 |                 |       ^x6       |                
- 2279 |      loadx2     |                 |       +x6       |       %x6       |                
- 2280 |      loadx2     |                 |                 |       ==x6      |                
- 2281 |      loadx2     |                 |                 |       -x6       |                
- 2282 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2283 |      loadx2     |                 |                 |       <x6       |                
- 2284 |      loadx2     |                 |                 |       *x6       |                
- 2285 |      loadx2     |                 |       +x6       |                 |                
- 2286 |      loadx2     |                 |                 |                 |                
- 2287 |      loadx2     |                 |                 |                 |                
- 2288 |      loadx2     |                 |       +x6       |                 |                
- 2289 |      loadx2     |                 |                 |                 |                
- 2290 |      loadx2     |                 |                 |                 |                
- 2291 |      loadx2     |                 |       +x6       |                 |                
- 2292 |      loadx2     |                 |                 |                 |                
- 2293 |      loadx2     |                 |                 |                 |                
- 2294 |      loadx2     |                 |                 |                 |                
- 2295 |      loadx2     |                 |                 |                 |                
- 2296 |      loadx2     |                 |                 |                 |                
+ 2158 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2159 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2160 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2161 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 2162 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2163 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2164 |                 |                 |       +x6       |       +x6       |                
+ 2165 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2166 |      loadx2     |                 |       +x4       |       ^x6       |                
+ 2167 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2168 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2169 |      loadx2     |                 |                 |       >>x6      |                
+ 2170 |      loadx2     |                 |                 |       ^x6       |                
+ 2171 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2172 |      loadx2     |                 |                 |       ==x6      |                
+ 2173 |      loadx2     |                 |                 |       -x6       |                
+ 2174 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2175 |      loadx2     |                 |                 |       <x6       |                
+ 2176 |      loadx2     |                 |                 |       *x6       |                
+ 2177 |      loadx2     |                 |       +x6       |                 |                
+ 2178 |      loadx2     |                 |                 |                 |                
+ 2179 |      loadx2     |                 |                 |                 |                
+ 2180 |      loadx2     |                 |       +x6       |                 |                
+ 2181 |      loadx2     |                 |                 |                 |                
+ 2182 |      loadx2     |                 |                 |                 |                
+ 2183 |      loadx2     |                 |       +x6       |                 |                
+ 2184 |      loadx2     |                 |                 |                 |                
+ 2185 |      loadx2     |                 |                 |                 |                
+ 2186 |      loadx2     |                 |                 |                 |                
+ 2187 |      loadx2     |                 |                 |                 |                
+ 2188 |      loadx2     |                 |                 |                 |                
 
 --- Iter 82 (batch 192): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2297 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2298 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2299 |                 |     vstorex2    |                 |       ^x6       |                
- 2300 |                 |     vstorex2    |                 |       >>x6      |                
- 2301 |                 |     vstorex2    |                 |       ^x6       |                
- 2302 |                 |     vstorex2    |                 |  multiply_addx6 |                
- 2303 |                 |                 |       +x2       |       +x6       |                
- 2304 |      loadx2     |                 |       +x2       |       <<x6      |                
- 2305 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2306 |      loadx2     |                 |       +x2       |  multiply_addx6 |                
- 2307 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2308 |      loadx2     |                 |       +x2       |       >>x6      |                
- 2309 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2310 |      loadx2     |                 |       +x2       |       %x6       |                
- 2311 |      loadx2     |                 |       +x12      |       ==x6      |                
- 2312 |                 |                 |                 |       -x6       |                
- 2313 |                 |                 |                 |  multiply_addx6 |                
- 2314 |                 |                 |                 |       <x6       |                
- 2315 |                 |                 |                 |       *x6       |                
+ 2189 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2190 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2191 |                 |     vstorex2    |                 |       ^x6       |                
+ 2192 |                 |     vstorex2    |                 |       >>x6      |                
+ 2193 |                 |     vstorex2    |                 |       ^x6       |                
+ 2194 |                 |     vstorex2    |                 |  multiply_addx6 |                
+ 2195 |                 |                 |       +x2       |       +x6       |                
+ 2196 |      loadx2     |                 |       +x2       |       <<x6      |                
+ 2197 |      loadx2     |                 |       +x2       |       ^x6       |                
+ 2198 |      loadx2     |                 |       +x2       |  multiply_addx6 |                
+ 2199 |      loadx2     |                 |       +x2       |       ^x6       |                
+ 2200 |      loadx2     |                 |       +x2       |       >>x6      |                
+ 2201 |      loadx2     |                 |       +x2       |       ^x6       |                
+ 2202 |      loadx2     |                 |       +x2       |       %x6       |                
+ 2203 |      loadx2     |                 |       +x12      |       ==x6      |                
+ 2204 |                 |                 |                 |       -x6       |                
+ 2205 |                 |                 |                 |  multiply_addx6 |                
+ 2206 |                 |                 |                 |       <x6       |                
+ 2207 |                 |                 |                 |       *x6       |                
 
 --- Iter 83 (batch 240): 19 cycles | LOAD:53% STORE:32% ALU:47% VALU:100% ---
 
@@ -2722,195 +2614,195 @@ Resource usage:
   FLOW:    0 cycles (  0.0%)
 ================================================================================
 
- 2316 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 2317 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
- 2318 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 2319 |     vloadx2     |     vstorex2    |                 |       >>x2      |                
- 2320 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 2321 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
- 2322 |                 |                 |       +x6       |       +x2       |                
- 2323 |      loadx2     |                 |       +x6       |       <<x2      |                
- 2324 |      loadx2     |                 |       +x12      |       ^x2       |                
- 2325 |      loadx2     |                 |                 |  multiply_addx2 |                
- 2326 |      loadx2     |                 |       +x6       |       ^x2       |                
- 2327 |      loadx2     |                 |                 |       >>x2      |                
- 2328 |      loadx2     |                 |                 |       ^x2       |                
- 2329 |      loadx2     |                 |       +x6       |       %x2       |                
- 2330 |      loadx2     |                 |                 |       ==x2      |                
- 2331 |      loadx2     |                 |                 |       -x2       |                
- 2332 |      loadx2     |                 |       +x6       |  multiply_addx2 |                
- 2333 |      loadx2     |                 |                 |       <x2       |                
- 2334 |      loadx2     |                 |                 |       *x2       |                
- 2335 |      loadx2     |                 |       +x6       |                 |                
- 2336 |      loadx2     |                 |                 |                 |                
- 2337 |      loadx2     |                 |                 |                 |                
- 2338 |      loadx2     |                 |       +x6       |                 |                
- 2339 |      loadx2     |                 |                 |                 |                
- 2340 |      loadx2     |                 |                 |                 |                
- 2341 |      loadx2     |                 |       +x6       |                 |                
- 2342 |      loadx2     |                 |                 |                 |                
- 2343 |      loadx2     |                 |                 |                 |                
- 2344 |      loadx2     |                 |                 |                 |                
- 2345 |      loadx2     |                 |                 |                 |                
- 2346 |      loadx2     |                 |                 |                 |                
+ 2208 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 2209 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
+ 2210 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 2211 |     vloadx2     |     vstorex2    |                 |       >>x2      |                
+ 2212 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 2213 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
+ 2214 |                 |                 |       +x6       |       +x2       |                
+ 2215 |      loadx2     |                 |       +x6       |       <<x2      |                
+ 2216 |      loadx2     |                 |       +x12      |       ^x2       |                
+ 2217 |      loadx2     |                 |                 |  multiply_addx2 |                
+ 2218 |      loadx2     |                 |       +x6       |       ^x2       |                
+ 2219 |      loadx2     |                 |                 |       >>x2      |                
+ 2220 |      loadx2     |                 |                 |       ^x2       |                
+ 2221 |      loadx2     |                 |       +x6       |       %x2       |                
+ 2222 |      loadx2     |                 |                 |       ==x2      |                
+ 2223 |      loadx2     |                 |                 |       -x2       |                
+ 2224 |      loadx2     |                 |       +x6       |  multiply_addx2 |                
+ 2225 |      loadx2     |                 |                 |       <x2       |                
+ 2226 |      loadx2     |                 |                 |       *x2       |                
+ 2227 |      loadx2     |                 |       +x6       |                 |                
+ 2228 |      loadx2     |                 |                 |                 |                
+ 2229 |      loadx2     |                 |                 |                 |                
+ 2230 |      loadx2     |                 |       +x6       |                 |                
+ 2231 |      loadx2     |                 |                 |                 |                
+ 2232 |      loadx2     |                 |                 |                 |                
+ 2233 |      loadx2     |                 |       +x6       |                 |                
+ 2234 |      loadx2     |                 |                 |                 |                
+ 2235 |      loadx2     |                 |                 |                 |                
+ 2236 |      loadx2     |                 |                 |                 |                
+ 2237 |      loadx2     |                 |                 |                 |                
+ 2238 |      loadx2     |                 |                 |                 |                
 
 --- Iter 84 (batch 0): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2347 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2348 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2349 |     vloadx2     |                 |                 |       ^x6       |                
- 2350 |     vloadx2     |                 |                 |       >>x6      |                
- 2351 |     vloadx2     |                 |                 |       ^x6       |                
- 2352 |     vloadx2     |                 |                 |  multiply_addx6 |                
- 2353 |                 |                 |       +x6       |       +x6       |                
- 2354 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2355 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2356 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2357 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2358 |      loadx2     |                 |                 |       >>x6      |                
- 2359 |      loadx2     |                 |                 |       ^x6       |                
- 2360 |      loadx2     |                 |       +x6       |       %x6       |                
- 2361 |      loadx2     |                 |                 |       ==x6      |                
- 2362 |      loadx2     |                 |                 |       -x6       |                
- 2363 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2364 |      loadx2     |                 |                 |       <x6       |                
- 2365 |      loadx2     |                 |                 |       *x6       |                
- 2366 |      loadx2     |                 |       +x6       |                 |                
- 2367 |      loadx2     |                 |                 |                 |                
- 2368 |      loadx2     |                 |                 |                 |                
- 2369 |      loadx2     |                 |       +x6       |                 |                
- 2370 |      loadx2     |                 |                 |                 |                
- 2371 |      loadx2     |                 |                 |                 |                
- 2372 |      loadx2     |                 |       +x6       |                 |                
- 2373 |      loadx2     |                 |                 |                 |                
- 2374 |      loadx2     |                 |                 |                 |                
- 2375 |      loadx2     |                 |                 |                 |                
- 2376 |      loadx2     |                 |                 |                 |                
- 2377 |      loadx2     |                 |                 |                 |                
+ 2239 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2240 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2241 |     vloadx2     |                 |                 |       ^x6       |                
+ 2242 |     vloadx2     |                 |                 |       >>x6      |                
+ 2243 |     vloadx2     |                 |                 |       ^x6       |                
+ 2244 |     vloadx2     |                 |                 |  multiply_addx6 |                
+ 2245 |                 |                 |       +x6       |       +x6       |                
+ 2246 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2247 |      loadx2     |                 |       +x12      |       ^x6       |                
+ 2248 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2249 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2250 |      loadx2     |                 |                 |       >>x6      |                
+ 2251 |      loadx2     |                 |                 |       ^x6       |                
+ 2252 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2253 |      loadx2     |                 |                 |       ==x6      |                
+ 2254 |      loadx2     |                 |                 |       -x6       |                
+ 2255 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2256 |      loadx2     |                 |                 |       <x6       |                
+ 2257 |      loadx2     |                 |                 |       *x6       |                
+ 2258 |      loadx2     |                 |       +x6       |                 |                
+ 2259 |      loadx2     |                 |                 |                 |                
+ 2260 |      loadx2     |                 |                 |                 |                
+ 2261 |      loadx2     |                 |       +x6       |                 |                
+ 2262 |      loadx2     |                 |                 |                 |                
+ 2263 |      loadx2     |                 |                 |                 |                
+ 2264 |      loadx2     |                 |       +x6       |                 |                
+ 2265 |      loadx2     |                 |                 |                 |                
+ 2266 |      loadx2     |                 |                 |                 |                
+ 2267 |      loadx2     |                 |                 |                 |                
+ 2268 |      loadx2     |                 |                 |                 |                
+ 2269 |      loadx2     |                 |                 |                 |                
 
 --- Iter 85 (batch 48): 31 cycles | LOAD:97% STORE:6% ALU:29% VALU:61% ---
 
- 2378 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2379 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2380 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2381 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2382 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2383 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2384 |                 |                 |       +x6       |       +x6       |                
- 2385 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2386 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2387 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2388 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2389 |      loadx2     |                 |                 |       >>x6      |                
- 2390 |      loadx2     |                 |                 |       ^x6       |                
- 2391 |      loadx2     |                 |       +x6       |       %x6       |                
- 2392 |      loadx2     |                 |                 |       ==x6      |                
- 2393 |      loadx2     |                 |                 |       -x6       |                
- 2394 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2395 |      loadx2     |                 |                 |       <x6       |                
- 2396 |      loadx2     |                 |                 |       *x6       |                
- 2397 |      loadx2     |                 |       +x6       |                 |                
- 2398 |      loadx2     |                 |                 |                 |                
- 2399 |      loadx2     |                 |                 |                 |                
- 2400 |      loadx2     |                 |       +x6       |                 |                
- 2401 |      loadx2     |                 |                 |                 |                
- 2402 |      loadx2     |                 |                 |                 |                
- 2403 |      loadx2     |                 |       +x6       |                 |                
- 2404 |      loadx2     |                 |                 |                 |                
- 2405 |      loadx2     |                 |                 |                 |                
- 2406 |      loadx2     |                 |                 |                 |                
- 2407 |      loadx2     |                 |                 |                 |                
- 2408 |      loadx2     |                 |                 |                 |                
+ 2270 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2271 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2272 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2273 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 2274 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2275 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2276 |                 |                 |       +x6       |       +x6       |                
+ 2277 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2278 |      loadx2     |                 |       +x12      |       ^x6       |                
+ 2279 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2280 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2281 |      loadx2     |                 |                 |       >>x6      |                
+ 2282 |      loadx2     |                 |                 |       ^x6       |                
+ 2283 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2284 |      loadx2     |                 |                 |       ==x6      |                
+ 2285 |      loadx2     |                 |                 |       -x6       |                
+ 2286 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2287 |      loadx2     |                 |                 |       <x6       |                
+ 2288 |      loadx2     |                 |                 |       *x6       |                
+ 2289 |      loadx2     |                 |       +x6       |                 |                
+ 2290 |      loadx2     |                 |                 |                 |                
+ 2291 |      loadx2     |                 |                 |                 |                
+ 2292 |      loadx2     |                 |       +x6       |                 |                
+ 2293 |      loadx2     |                 |                 |                 |                
+ 2294 |      loadx2     |                 |                 |                 |                
+ 2295 |      loadx2     |                 |       +x6       |                 |                
+ 2296 |      loadx2     |                 |                 |                 |                
+ 2297 |      loadx2     |                 |                 |                 |                
+ 2298 |      loadx2     |                 |                 |                 |                
+ 2299 |      loadx2     |                 |                 |                 |                
+ 2300 |      loadx2     |                 |                 |                 |                
 
 --- Iter 86 (batch 96): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2409 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2410 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2411 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2412 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2413 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2414 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2415 |                 |                 |       +x6       |       +x6       |                
- 2416 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2417 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2418 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2419 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2420 |      loadx2     |                 |                 |       >>x6      |                
- 2421 |      loadx2     |                 |                 |       ^x6       |                
- 2422 |      loadx2     |                 |       +x6       |       %x6       |                
- 2423 |      loadx2     |                 |                 |       ==x6      |                
- 2424 |      loadx2     |                 |                 |       -x6       |                
- 2425 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2426 |      loadx2     |                 |                 |       <x6       |                
- 2427 |      loadx2     |                 |                 |       *x6       |                
- 2428 |      loadx2     |                 |       +x6       |                 |                
- 2429 |      loadx2     |                 |                 |                 |                
- 2430 |      loadx2     |                 |                 |                 |                
- 2431 |      loadx2     |                 |       +x6       |                 |                
- 2432 |      loadx2     |                 |                 |                 |                
- 2433 |      loadx2     |                 |                 |                 |                
- 2434 |      loadx2     |                 |       +x6       |                 |                
- 2435 |      loadx2     |                 |                 |                 |                
- 2436 |      loadx2     |                 |                 |                 |                
- 2437 |      loadx2     |                 |                 |                 |                
- 2438 |      loadx2     |                 |                 |                 |                
- 2439 |      loadx2     |                 |                 |                 |                
+ 2301 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2302 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2303 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2304 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 2305 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2306 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2307 |                 |                 |       +x6       |       +x6       |                
+ 2308 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2309 |      loadx2     |                 |       +x12      |       ^x6       |                
+ 2310 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2311 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2312 |      loadx2     |                 |                 |       >>x6      |                
+ 2313 |      loadx2     |                 |                 |       ^x6       |                
+ 2314 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2315 |      loadx2     |                 |                 |       ==x6      |                
+ 2316 |      loadx2     |                 |                 |       -x6       |                
+ 2317 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2318 |      loadx2     |                 |                 |       <x6       |                
+ 2319 |      loadx2     |                 |                 |       *x6       |                
+ 2320 |      loadx2     |                 |       +x6       |                 |                
+ 2321 |      loadx2     |                 |                 |                 |                
+ 2322 |      loadx2     |                 |                 |                 |                
+ 2323 |      loadx2     |                 |       +x6       |                 |                
+ 2324 |      loadx2     |                 |                 |                 |                
+ 2325 |      loadx2     |                 |                 |                 |                
+ 2326 |      loadx2     |                 |       +x6       |                 |                
+ 2327 |      loadx2     |                 |                 |                 |                
+ 2328 |      loadx2     |                 |                 |                 |                
+ 2329 |      loadx2     |                 |                 |                 |                
+ 2330 |      loadx2     |                 |                 |                 |                
+ 2331 |      loadx2     |                 |                 |                 |                
 
 --- Iter 87 (batch 144): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2440 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2441 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2442 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2443 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2444 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2445 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2446 |                 |                 |       +x6       |       +x6       |                
- 2447 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2448 |      loadx2     |                 |       +x4       |       ^x6       |                
- 2449 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2450 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2451 |      loadx2     |                 |                 |       >>x6      |                
- 2452 |      loadx2     |                 |                 |       ^x6       |                
- 2453 |      loadx2     |                 |       +x6       |       %x6       |                
- 2454 |      loadx2     |                 |                 |       ==x6      |                
- 2455 |      loadx2     |                 |                 |       -x6       |                
- 2456 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2457 |      loadx2     |                 |                 |       <x6       |                
- 2458 |      loadx2     |                 |                 |       *x6       |                
- 2459 |      loadx2     |                 |       +x6       |                 |                
- 2460 |      loadx2     |                 |                 |                 |                
- 2461 |      loadx2     |                 |                 |                 |                
- 2462 |      loadx2     |                 |       +x6       |                 |                
- 2463 |      loadx2     |                 |                 |                 |                
- 2464 |      loadx2     |                 |                 |                 |                
- 2465 |      loadx2     |                 |       +x6       |                 |                
- 2466 |      loadx2     |                 |                 |                 |                
- 2467 |      loadx2     |                 |                 |                 |                
- 2468 |      loadx2     |                 |                 |                 |                
- 2469 |      loadx2     |                 |                 |                 |                
- 2470 |      loadx2     |                 |                 |                 |                
+ 2332 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2333 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2334 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2335 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 2336 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2337 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2338 |                 |                 |       +x6       |       +x6       |                
+ 2339 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2340 |      loadx2     |                 |       +x4       |       ^x6       |                
+ 2341 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2342 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2343 |      loadx2     |                 |                 |       >>x6      |                
+ 2344 |      loadx2     |                 |                 |       ^x6       |                
+ 2345 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2346 |      loadx2     |                 |                 |       ==x6      |                
+ 2347 |      loadx2     |                 |                 |       -x6       |                
+ 2348 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2349 |      loadx2     |                 |                 |       <x6       |                
+ 2350 |      loadx2     |                 |                 |       *x6       |                
+ 2351 |      loadx2     |                 |       +x6       |                 |                
+ 2352 |      loadx2     |                 |                 |                 |                
+ 2353 |      loadx2     |                 |                 |                 |                
+ 2354 |      loadx2     |                 |       +x6       |                 |                
+ 2355 |      loadx2     |                 |                 |                 |                
+ 2356 |      loadx2     |                 |                 |                 |                
+ 2357 |      loadx2     |                 |       +x6       |                 |                
+ 2358 |      loadx2     |                 |                 |                 |                
+ 2359 |      loadx2     |                 |                 |                 |                
+ 2360 |      loadx2     |                 |                 |                 |                
+ 2361 |      loadx2     |                 |                 |                 |                
+ 2362 |      loadx2     |                 |                 |                 |                
 
 --- Iter 88 (batch 192): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2471 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2472 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2473 |                 |     vstorex2    |                 |       ^x6       |                
- 2474 |                 |     vstorex2    |                 |       >>x6      |                
- 2475 |                 |     vstorex2    |                 |       ^x6       |                
- 2476 |                 |     vstorex2    |                 |  multiply_addx6 |                
- 2477 |                 |                 |       +x2       |       +x6       |                
- 2478 |      loadx2     |                 |       +x2       |       <<x6      |                
- 2479 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2480 |      loadx2     |                 |       +x2       |  multiply_addx6 |                
- 2481 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2482 |      loadx2     |                 |       +x2       |       >>x6      |                
- 2483 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2484 |      loadx2     |                 |       +x2       |       %x6       |                
- 2485 |      loadx2     |                 |       +x12      |       ==x6      |                
- 2486 |                 |                 |                 |       -x6       |                
- 2487 |                 |                 |                 |  multiply_addx6 |                
- 2488 |                 |                 |                 |       <x6       |                
- 2489 |                 |                 |                 |       *x6       |                
+ 2363 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2364 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2365 |                 |     vstorex2    |                 |       ^x6       |                
+ 2366 |                 |     vstorex2    |                 |       >>x6      |                
+ 2367 |                 |     vstorex2    |                 |       ^x6       |                
+ 2368 |                 |     vstorex2    |                 |  multiply_addx6 |                
+ 2369 |                 |                 |       +x2       |       +x6       |                
+ 2370 |      loadx2     |                 |       +x2       |       <<x6      |                
+ 2371 |      loadx2     |                 |       +x2       |       ^x6       |                
+ 2372 |      loadx2     |                 |       +x2       |  multiply_addx6 |                
+ 2373 |      loadx2     |                 |       +x2       |       ^x6       |                
+ 2374 |      loadx2     |                 |       +x2       |       >>x6      |                
+ 2375 |      loadx2     |                 |       +x2       |       ^x6       |                
+ 2376 |      loadx2     |                 |       +x2       |       %x6       |                
+ 2377 |      loadx2     |                 |       +x12      |       ==x6      |                
+ 2378 |                 |                 |                 |       -x6       |                
+ 2379 |                 |                 |                 |  multiply_addx6 |                
+ 2380 |                 |                 |                 |       <x6       |                
+ 2381 |                 |                 |                 |       *x6       |                
 
 --- Iter 89 (batch 240): 19 cycles | LOAD:53% STORE:32% ALU:47% VALU:100% ---
 
@@ -2925,225 +2817,225 @@ Resource usage:
   FLOW:    0 cycles (  0.0%)
 ================================================================================
 
- 2490 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 2491 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
- 2492 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 2493 |     vloadx2     |     vstorex2    |                 |       >>x2      |                
- 2494 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
- 2495 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
- 2496 |                 |                 |       +x6       |       +x2       |                
- 2497 |      loadx2     |                 |       +x6       |       <<x2      |                
- 2498 |      loadx2     |                 |       +x12      |       ^x2       |                
- 2499 |      loadx2     |                 |                 |  multiply_addx2 |                
- 2500 |      loadx2     |                 |       +x6       |       ^x2       |                
- 2501 |      loadx2     |                 |                 |       >>x2      |                
- 2502 |      loadx2     |                 |                 |       ^x2       |                
- 2503 |      loadx2     |                 |       +x6       |       %x2       |                
- 2504 |      loadx2     |                 |                 |       ==x2      |                
- 2505 |      loadx2     |                 |                 |       -x2       |                
- 2506 |      loadx2     |                 |       +x6       |  multiply_addx2 |                
- 2507 |      loadx2     |                 |                 |       <x2       |                
- 2508 |      loadx2     |                 |                 |       *x2       |                
- 2509 |      loadx2     |                 |       +x6       |                 |                
- 2510 |      loadx2     |                 |                 |                 |                
- 2511 |      loadx2     |                 |                 |                 |                
- 2512 |      loadx2     |                 |       +x6       |                 |                
- 2513 |      loadx2     |                 |                 |                 |                
- 2514 |      loadx2     |                 |                 |                 |                
- 2515 |      loadx2     |                 |       +x6       |                 |                
- 2516 |      loadx2     |                 |                 |                 |                
- 2517 |      loadx2     |                 |                 |                 |                
- 2518 |      loadx2     |                 |                 |                 |                
- 2519 |      loadx2     |                 |                 |                 |                
- 2520 |      loadx2     |                 |                 |                 |                
+ 2382 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 2383 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
+ 2384 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 2385 |     vloadx2     |     vstorex2    |                 |       >>x2      |                
+ 2386 |     vloadx2     |     vstorex2    |                 |       ^x2       |                
+ 2387 |     vloadx2     |     vstorex2    |                 |  multiply_addx2 |                
+ 2388 |                 |                 |       +x6       |       +x2       |                
+ 2389 |      loadx2     |                 |       +x6       |       <<x2      |                
+ 2390 |      loadx2     |                 |       +x12      |       ^x2       |                
+ 2391 |      loadx2     |                 |                 |  multiply_addx2 |                
+ 2392 |      loadx2     |                 |       +x6       |       ^x2       |                
+ 2393 |      loadx2     |                 |                 |       >>x2      |                
+ 2394 |      loadx2     |                 |                 |       ^x2       |                
+ 2395 |      loadx2     |                 |       +x6       |       %x2       |                
+ 2396 |      loadx2     |                 |                 |       ==x2      |                
+ 2397 |      loadx2     |                 |                 |       -x2       |                
+ 2398 |      loadx2     |                 |       +x6       |  multiply_addx2 |                
+ 2399 |      loadx2     |                 |                 |       <x2       |                
+ 2400 |      loadx2     |                 |                 |       *x2       |                
+ 2401 |      loadx2     |                 |       +x6       |                 |                
+ 2402 |      loadx2     |                 |                 |                 |                
+ 2403 |      loadx2     |                 |                 |                 |                
+ 2404 |      loadx2     |                 |       +x6       |                 |                
+ 2405 |      loadx2     |                 |                 |                 |                
+ 2406 |      loadx2     |                 |                 |                 |                
+ 2407 |      loadx2     |                 |       +x6       |                 |                
+ 2408 |      loadx2     |                 |                 |                 |                
+ 2409 |      loadx2     |                 |                 |                 |                
+ 2410 |      loadx2     |                 |                 |                 |                
+ 2411 |      loadx2     |                 |                 |                 |                
+ 2412 |      loadx2     |                 |                 |                 |                
 
 --- Iter 90 (batch 0): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2521 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2522 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2523 |     vloadx2     |                 |                 |       ^x6       |                
- 2524 |     vloadx2     |                 |                 |       >>x6      |                
- 2525 |     vloadx2     |                 |                 |       ^x6       |                
- 2526 |     vloadx2     |                 |                 |  multiply_addx6 |                
- 2527 |                 |                 |       +x6       |       +x6       |                
- 2528 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2529 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2530 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2531 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2532 |      loadx2     |                 |                 |       >>x6      |                
- 2533 |      loadx2     |                 |                 |       ^x6       |                
- 2534 |      loadx2     |                 |       +x6       |       %x6       |                
- 2535 |      loadx2     |                 |                 |       ==x6      |                
- 2536 |      loadx2     |                 |                 |       -x6       |                
- 2537 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2538 |      loadx2     |                 |                 |       <x6       |                
- 2539 |      loadx2     |                 |                 |       *x6       |                
- 2540 |      loadx2     |                 |       +x6       |                 |                
- 2541 |      loadx2     |                 |                 |                 |                
- 2542 |      loadx2     |                 |                 |                 |                
- 2543 |      loadx2     |                 |       +x6       |                 |                
- 2544 |      loadx2     |                 |                 |                 |                
- 2545 |      loadx2     |                 |                 |                 |                
- 2546 |      loadx2     |                 |       +x6       |                 |                
- 2547 |      loadx2     |                 |                 |                 |                
- 2548 |      loadx2     |                 |                 |                 |                
- 2549 |      loadx2     |                 |                 |                 |                
- 2550 |      loadx2     |                 |                 |                 |                
- 2551 |      loadx2     |                 |                 |                 |                
+ 2413 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2414 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2415 |     vloadx2     |                 |                 |       ^x6       |                
+ 2416 |     vloadx2     |                 |                 |       >>x6      |                
+ 2417 |     vloadx2     |                 |                 |       ^x6       |                
+ 2418 |     vloadx2     |                 |                 |  multiply_addx6 |                
+ 2419 |                 |                 |       +x6       |       +x6       |                
+ 2420 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2421 |      loadx2     |                 |       +x12      |       ^x6       |                
+ 2422 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2423 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2424 |      loadx2     |                 |                 |       >>x6      |                
+ 2425 |      loadx2     |                 |                 |       ^x6       |                
+ 2426 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2427 |      loadx2     |                 |                 |       ==x6      |                
+ 2428 |      loadx2     |                 |                 |       -x6       |                
+ 2429 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2430 |      loadx2     |                 |                 |       <x6       |                
+ 2431 |      loadx2     |                 |                 |       *x6       |                
+ 2432 |      loadx2     |                 |       +x6       |                 |                
+ 2433 |      loadx2     |                 |                 |                 |                
+ 2434 |      loadx2     |                 |                 |                 |                
+ 2435 |      loadx2     |                 |       +x6       |                 |                
+ 2436 |      loadx2     |                 |                 |                 |                
+ 2437 |      loadx2     |                 |                 |                 |                
+ 2438 |      loadx2     |                 |       +x6       |                 |                
+ 2439 |      loadx2     |                 |                 |                 |                
+ 2440 |      loadx2     |                 |                 |                 |                
+ 2441 |      loadx2     |                 |                 |                 |                
+ 2442 |      loadx2     |                 |                 |                 |                
+ 2443 |      loadx2     |                 |                 |                 |                
 
 --- Iter 91 (batch 48): 31 cycles | LOAD:97% STORE:6% ALU:29% VALU:61% ---
 
- 2552 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2553 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2554 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2555 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2556 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2557 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2558 |                 |                 |       +x6       |       +x6       |                
- 2559 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2560 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2561 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2562 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2563 |      loadx2     |                 |                 |       >>x6      |                
- 2564 |      loadx2     |                 |                 |       ^x6       |                
- 2565 |      loadx2     |                 |       +x6       |       %x6       |                
- 2566 |      loadx2     |                 |                 |       ==x6      |                
- 2567 |      loadx2     |                 |                 |       -x6       |                
- 2568 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2569 |      loadx2     |                 |                 |       <x6       |                
- 2570 |      loadx2     |                 |                 |       *x6       |                
- 2571 |      loadx2     |                 |       +x6       |                 |                
- 2572 |      loadx2     |                 |                 |                 |                
- 2573 |      loadx2     |                 |                 |                 |                
- 2574 |      loadx2     |                 |       +x6       |                 |                
- 2575 |      loadx2     |                 |                 |                 |                
- 2576 |      loadx2     |                 |                 |                 |                
- 2577 |      loadx2     |                 |       +x6       |                 |                
- 2578 |      loadx2     |                 |                 |                 |                
- 2579 |      loadx2     |                 |                 |                 |                
- 2580 |      loadx2     |                 |                 |                 |                
- 2581 |      loadx2     |                 |                 |                 |                
- 2582 |      loadx2     |                 |                 |                 |                
+ 2444 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2445 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2446 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2447 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 2448 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2449 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2450 |                 |                 |       +x6       |       +x6       |                
+ 2451 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2452 |      loadx2     |                 |       +x12      |       ^x6       |                
+ 2453 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2454 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2455 |      loadx2     |                 |                 |       >>x6      |                
+ 2456 |      loadx2     |                 |                 |       ^x6       |                
+ 2457 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2458 |      loadx2     |                 |                 |       ==x6      |                
+ 2459 |      loadx2     |                 |                 |       -x6       |                
+ 2460 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2461 |      loadx2     |                 |                 |       <x6       |                
+ 2462 |      loadx2     |                 |                 |       *x6       |                
+ 2463 |      loadx2     |                 |       +x6       |                 |                
+ 2464 |      loadx2     |                 |                 |                 |                
+ 2465 |      loadx2     |                 |                 |                 |                
+ 2466 |      loadx2     |                 |       +x6       |                 |                
+ 2467 |      loadx2     |                 |                 |                 |                
+ 2468 |      loadx2     |                 |                 |                 |                
+ 2469 |      loadx2     |                 |       +x6       |                 |                
+ 2470 |      loadx2     |                 |                 |                 |                
+ 2471 |      loadx2     |                 |                 |                 |                
+ 2472 |      loadx2     |                 |                 |                 |                
+ 2473 |      loadx2     |                 |                 |                 |                
+ 2474 |      loadx2     |                 |                 |                 |                
 
 --- Iter 92 (batch 96): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2583 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2584 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2585 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2586 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2587 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2588 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2589 |                 |                 |       +x6       |       +x6       |                
- 2590 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2591 |      loadx2     |                 |       +x12      |       ^x6       |                
- 2592 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2593 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2594 |      loadx2     |                 |                 |       >>x6      |                
- 2595 |      loadx2     |                 |                 |       ^x6       |                
- 2596 |      loadx2     |                 |       +x6       |       %x6       |                
- 2597 |      loadx2     |                 |                 |       ==x6      |                
- 2598 |      loadx2     |                 |                 |       -x6       |                
- 2599 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2600 |      loadx2     |                 |                 |       <x6       |                
- 2601 |      loadx2     |                 |                 |       *x6       |                
- 2602 |      loadx2     |                 |       +x6       |                 |                
- 2603 |      loadx2     |                 |                 |                 |                
- 2604 |      loadx2     |                 |                 |                 |                
- 2605 |      loadx2     |                 |       +x6       |                 |                
- 2606 |      loadx2     |                 |                 |                 |                
- 2607 |      loadx2     |                 |                 |                 |                
- 2608 |      loadx2     |                 |       +x6       |                 |                
- 2609 |      loadx2     |                 |                 |                 |                
- 2610 |      loadx2     |                 |                 |                 |                
- 2611 |      loadx2     |                 |                 |                 |                
- 2612 |      loadx2     |                 |                 |                 |                
- 2613 |      loadx2     |                 |                 |                 |                
+ 2475 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2476 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2477 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2478 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 2479 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2480 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2481 |                 |                 |       +x6       |       +x6       |                
+ 2482 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2483 |      loadx2     |                 |       +x12      |       ^x6       |                
+ 2484 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2485 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2486 |      loadx2     |                 |                 |       >>x6      |                
+ 2487 |      loadx2     |                 |                 |       ^x6       |                
+ 2488 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2489 |      loadx2     |                 |                 |       ==x6      |                
+ 2490 |      loadx2     |                 |                 |       -x6       |                
+ 2491 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2492 |      loadx2     |                 |                 |       <x6       |                
+ 2493 |      loadx2     |                 |                 |       *x6       |                
+ 2494 |      loadx2     |                 |       +x6       |                 |                
+ 2495 |      loadx2     |                 |                 |                 |                
+ 2496 |      loadx2     |                 |                 |                 |                
+ 2497 |      loadx2     |                 |       +x6       |                 |                
+ 2498 |      loadx2     |                 |                 |                 |                
+ 2499 |      loadx2     |                 |                 |                 |                
+ 2500 |      loadx2     |                 |       +x6       |                 |                
+ 2501 |      loadx2     |                 |                 |                 |                
+ 2502 |      loadx2     |                 |                 |                 |                
+ 2503 |      loadx2     |                 |                 |                 |                
+ 2504 |      loadx2     |                 |                 |                 |                
+ 2505 |      loadx2     |                 |                 |                 |                
 
 --- Iter 93 (batch 144): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2614 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2615 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2616 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2617 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
- 2618 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2619 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2620 |                 |                 |       +x6       |       +x6       |                
- 2621 |      loadx2     |                 |       +x6       |       <<x6      |                
- 2622 |      loadx2     |                 |       +x4       |       ^x6       |                
- 2623 |      loadx2     |                 |                 |  multiply_addx6 |                
- 2624 |      loadx2     |                 |       +x6       |       ^x6       |                
- 2625 |      loadx2     |                 |                 |       >>x6      |                
- 2626 |      loadx2     |                 |                 |       ^x6       |                
- 2627 |      loadx2     |                 |       +x6       |       %x6       |                
- 2628 |      loadx2     |                 |                 |       ==x6      |                
- 2629 |      loadx2     |                 |                 |       -x6       |                
- 2630 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
- 2631 |      loadx2     |                 |                 |       <x6       |                
- 2632 |      loadx2     |                 |                 |       *x6       |                
- 2633 |      loadx2     |                 |       +x6       |                 |                
- 2634 |      loadx2     |                 |                 |                 |                
- 2635 |      loadx2     |                 |                 |                 |                
- 2636 |      loadx2     |                 |       +x6       |                 |                
- 2637 |      loadx2     |                 |                 |                 |                
- 2638 |      loadx2     |                 |                 |                 |                
- 2639 |      loadx2     |                 |       +x6       |                 |                
- 2640 |      loadx2     |                 |                 |                 |                
- 2641 |      loadx2     |                 |                 |                 |                
- 2642 |      loadx2     |                 |                 |                 |                
- 2643 |      loadx2     |                 |                 |                 |                
- 2644 |      loadx2     |                 |                 |                 |                
+ 2506 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2507 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2508 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2509 |     vloadx2     |     vstorex2    |                 |       >>x6      |                
+ 2510 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2511 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2512 |                 |                 |       +x6       |       +x6       |                
+ 2513 |      loadx2     |                 |       +x6       |       <<x6      |                
+ 2514 |      loadx2     |                 |       +x4       |       ^x6       |                
+ 2515 |      loadx2     |                 |                 |  multiply_addx6 |                
+ 2516 |      loadx2     |                 |       +x6       |       ^x6       |                
+ 2517 |      loadx2     |                 |                 |       >>x6      |                
+ 2518 |      loadx2     |                 |                 |       ^x6       |                
+ 2519 |      loadx2     |                 |       +x6       |       %x6       |                
+ 2520 |      loadx2     |                 |                 |       ==x6      |                
+ 2521 |      loadx2     |                 |                 |       -x6       |                
+ 2522 |      loadx2     |                 |       +x6       |  multiply_addx6 |                
+ 2523 |      loadx2     |                 |                 |       <x6       |                
+ 2524 |      loadx2     |                 |                 |       *x6       |                
+ 2525 |      loadx2     |                 |       +x6       |                 |                
+ 2526 |      loadx2     |                 |                 |                 |                
+ 2527 |      loadx2     |                 |                 |                 |                
+ 2528 |      loadx2     |                 |       +x6       |                 |                
+ 2529 |      loadx2     |                 |                 |                 |                
+ 2530 |      loadx2     |                 |                 |                 |                
+ 2531 |      loadx2     |                 |       +x6       |                 |                
+ 2532 |      loadx2     |                 |                 |                 |                
+ 2533 |      loadx2     |                 |                 |                 |                
+ 2534 |      loadx2     |                 |                 |                 |                
+ 2535 |      loadx2     |                 |                 |                 |                
+ 2536 |      loadx2     |                 |                 |                 |                
 
 --- Iter 94 (batch 192): 31 cycles | LOAD:97% STORE:19% ALU:29% VALU:61% ---
 
- 2645 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
- 2646 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
- 2647 |                 |     vstorex2    |                 |       ^x6       |                
- 2648 |                 |     vstorex2    |                 |       >>x6      |                
- 2649 |                 |     vstorex2    |                 |       ^x6       |                
- 2650 |                 |     vstorex2    |                 |  multiply_addx6 |                
- 2651 |                 |                 |       +x2       |       +x6       |                
- 2652 |      loadx2     |                 |       +x2       |       <<x6      |                
- 2653 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2654 |      loadx2     |                 |       +x2       |  multiply_addx6 |                
- 2655 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2656 |      loadx2     |                 |       +x2       |       >>x6      |                
- 2657 |      loadx2     |                 |       +x2       |       ^x6       |                
- 2658 |      loadx2     |                 |       +x2       |       %x6       |                
- 2659 |      loadx2     |                 |                 |       ==x6      |                
- 2660 |                 |                 |                 |       -x6       |                
- 2661 |                 |                 |                 |  multiply_addx6 |                
- 2662 |                 |                 |                 |       <x6       |                
- 2663 |                 |                 |                 |       *x6       |                
+ 2537 |     vloadx2     |     vstorex2    |                 |       ^x6       |                
+ 2538 |     vloadx2     |     vstorex2    |                 |  multiply_addx6 |                
+ 2539 |                 |     vstorex2    |                 |       ^x6       |                
+ 2540 |                 |     vstorex2    |                 |       >>x6      |                
+ 2541 |                 |     vstorex2    |                 |       ^x6       |                
+ 2542 |                 |     vstorex2    |                 |  multiply_addx6 |                
+ 2543 |                 |                 |       +x2       |       +x6       |                
+ 2544 |      loadx2     |                 |       +x2       |       <<x6      |                
+ 2545 |      loadx2     |                 |       +x2       |       ^x6       |                
+ 2546 |      loadx2     |                 |       +x2       |  multiply_addx6 |                
+ 2547 |      loadx2     |                 |       +x2       |       ^x6       |                
+ 2548 |      loadx2     |                 |       +x2       |       >>x6      |                
+ 2549 |      loadx2     |                 |       +x2       |       ^x6       |                
+ 2550 |      loadx2     |                 |       +x2       |       %x6       |                
+ 2551 |      loadx2     |                 |                 |       ==x6      |                
+ 2552 |                 |                 |                 |       -x6       |                
+ 2553 |                 |                 |                 |  multiply_addx6 |                
+ 2554 |                 |                 |                 |       <x6       |                
+ 2555 |                 |                 |                 |       *x6       |                
 
 --- Iter 95 (batch 240): 19 cycles | LOAD:53% STORE:32% ALU:42% VALU:100% ---
 
- 2664 |                 |                 |                 |       ^x2       |                
- 2665 |                 |                 |                 |  multiply_addx2 |                
- 2666 |                 |                 |                 |       ^x2       |                
- 2667 |                 |                 |                 |       >>x2      |                
- 2668 |                 |                 |                 |       ^x2       |                
- 2669 |                 |                 |                 |  multiply_addx2 |                
- 2670 |                 |                 |                 |       +x2       |                
- 2671 |                 |                 |                 |       <<x2      |                
- 2672 |                 |                 |                 |       ^x2       |                
- 2673 |                 |                 |                 |  multiply_addx2 |                
- 2674 |                 |                 |                 |       ^x2       |                
- 2675 |                 |                 |                 |       >>x2      |                
- 2676 |                 |                 |                 |       ^x2       |                
- 2677 |                 |                 |                 |       %x2       |                
- 2678 |                 |                 |                 |       ==x2      |                
- 2679 |                 |                 |                 |       -x2       |                
- 2680 |                 |                 |                 |  multiply_addx2 |                
- 2681 |                 |                 |                 |       <x2       |                
- 2682 |                 |                 |                 |       *x2       |                
- 2683 |                 |     vstorex2    |                 |                 |                
- 2684 |                 |     vstorex2    |                 |                 |                
- 2685 |                 |     vstorex2    |                 |                 |                
- 2686 |                 |     vstorex2    |                 |                 |                
- 2687 |                 |     vstorex2    |                 |                 |                
- 2688 |                 |     vstorex2    |                 |                 |                
- 2689 |                 |     vstorex2    |                 |                 |                
- 2690 |                 |     vstorex2    |                 |                 |                
+ 2556 |                 |                 |                 |       ^x2       |                
+ 2557 |                 |                 |                 |  multiply_addx2 |                
+ 2558 |                 |                 |                 |       ^x2       |                
+ 2559 |                 |                 |                 |       >>x2      |                
+ 2560 |                 |                 |                 |       ^x2       |                
+ 2561 |                 |                 |                 |  multiply_addx2 |                
+ 2562 |                 |                 |                 |       +x2       |                
+ 2563 |                 |                 |                 |       <<x2      |                
+ 2564 |                 |                 |                 |       ^x2       |                
+ 2565 |                 |                 |                 |  multiply_addx2 |                
+ 2566 |                 |                 |                 |       ^x2       |                
+ 2567 |                 |                 |                 |       >>x2      |                
+ 2568 |                 |                 |                 |       ^x2       |                
+ 2569 |                 |                 |                 |       %x2       |                
+ 2570 |                 |                 |                 |       ==x2      |                
+ 2571 |                 |                 |                 |       -x2       |                
+ 2572 |                 |                 |                 |  multiply_addx2 |                
+ 2573 |                 |                 |                 |       <x2       |                
+ 2574 |                 |                 |                 |       *x2       |                
+ 2575 |                 |     vstorex2    |                 |                 |                
+ 2576 |                 |     vstorex2    |                 |                 |                
+ 2577 |                 |     vstorex2    |                 |                 |                
+ 2578 |                 |     vstorex2    |                 |                 |                
+ 2579 |                 |     vstorex2    |                 |                 |                
+ 2580 |                 |     vstorex2    |                 |                 |                
+ 2581 |                 |     vstorex2    |                 |                 |                
+ 2582 |                 |     vstorex2    |                 |                 |                
 
 ================================================================================
 === ROUND 15 COMPLETE: 201 cycles ===
@@ -3157,11 +3049,11 @@ Resource usage:
 
 
 ================================================================================
-TOTAL CYCLES: 2691
+TOTAL CYCLES: 2583
 Overall resource usage:
-  LOAD: 2304 cycles ( 85.6%)
-  STORE:  512 cycles ( 19.0%)
-  ALU:  768 cycles ( 28.5%)
-  VALU: 1836 cycles ( 68.2%)
-  FLOW:   32 cycles (  1.2%)
+  LOAD: 2048 cycles ( 79.3%)
+  STORE:  512 cycles ( 19.8%)
+  ALU:  672 cycles ( 26.0%)
+  VALU: 1848 cycles ( 71.5%)
+  FLOW:   64 cycles (  2.5%)
 ================================================================================

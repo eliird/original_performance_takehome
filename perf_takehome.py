@@ -481,6 +481,7 @@ class KernelBuilder:
         # Condition vectors for vselect (separate from v_tmp1 to avoid conflicts)
         v_cond = [self.alloc_scratch(f"v_cond_{p}", VLEN) for p in range(N_PARALLEL)]
 
+
         # === Main loop body ===
         body = []
 
@@ -659,8 +660,13 @@ class KernelBuilder:
 
             remaining_valu = valu_ops_for_vload[valu_idx:] if valu_idx < len(valu_ops_for_vload) else []
 
-            if rnd == 0:
-                # === Round 0 optimization: all indices are 0, broadcast root value ===
+            # Tree traversal repeats every (forest_height + 1) rounds due to wrap-around
+            # Round 0, 11, 22, ...: all indices are 0
+            # Round 1, 12, 23, ...: all indices are 1 or 2
+            effective_round = rnd % (forest_height + 1)
+
+            if effective_round == 0:
+                # === Round 0/11/22/... optimization: all indices are 0, broadcast root value ===
                 # Instead of 24 scatter loads, we copy the pre-broadcast v_root_node_val
                 # to each cur_node_val[p]. We use valu with + 0 to copy vectors.
                 #
@@ -694,8 +700,8 @@ class KernelBuilder:
                     iter_body.append({"alu": next_vload_alu_ops[next_alu_idx]})
                     next_alu_idx += 1
 
-            elif rnd == 1:
-                # === Round 1 optimization: all indices are 1 or 2 ===
+            elif effective_round == 1:
+                # === Round 1/12/23/... optimization: all indices are 1 or 2 ===
                 # Use vselect to pick between pre-loaded tree[1] and tree[2] values
                 # node_val = (idx == 1) ? v_node_val_1 : v_node_val_2
                 #
@@ -760,7 +766,7 @@ class KernelBuilder:
                     next_alu_idx += 1
 
             else:
-                # === Normal gather for Round 1+ ===
+                # === Normal gather for Round 2+ ===
                 # Compute first gather address, overlapped with any remaining VALU
                 first_gather_bundle = {
                     "alu": [("+", tmp_addrs_0[q], self.scratch["forest_values_p"], cur_v_idx[q] + 0)
