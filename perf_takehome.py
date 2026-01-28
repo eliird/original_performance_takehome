@@ -201,24 +201,40 @@ class KernelBuilder:
 
         return slots
 
-    def build_gather_with_hash(self, v_idx_cur, v_node_val_cur, tmp_addrs, n_active_cur,
-                                v_val_prev, v_tmp1, hash_vecs, n_active_prev,
-                                pending_stores=None):
+    def build_gather_with_compute(self, v_idx_cur, v_node_val_cur, tmp_addrs, n_active_cur,
+                                   v_idx_prev, v_val_prev, v_tmp1, hash_vecs,
+                                   v_zero, v_two, v_n_nodes, n_active_prev,
+                                   pending_stores=None):
         """
-        Interleave gather (LOAD+ALU) with hash computation (VALU) and stores.
-        This is the key optimization: VALU was idle during gather, now runs hash in parallel.
+        Interleave gather (LOAD+ALU) with hash + index update (VALU) and stores.
+        This is the key optimization: VALU was idle during gather, now runs hash+index in parallel.
         """
         slots = []
 
-        # Get hash operations as a flat list of VALU bundles
-        hash_slots = []
+        # Get all VALU operations: hash (12 ops) + index update (6 ops) = 18 ops
+        valu_ops = []
         if n_active_prev > 0:
+            # Hash operations
             hash_ops = self.build_hash_vec_parallel(v_val_prev, v_tmp1, hash_vecs, n_active_prev)
             for h in hash_ops:
                 if isinstance(h, dict) and "valu" in h:
-                    hash_slots.append(h["valu"])
+                    valu_ops.append(h["valu"])
 
-        hash_idx = 0
+            # Index update operations (inline to get VALU slots)
+            # tmp1 = val % 2
+            valu_ops.append([("%", v_tmp1[p], v_val_prev[p], v_two) for p in range(n_active_prev)])
+            # tmp1 = (tmp1 == 0)
+            valu_ops.append([("==", v_tmp1[p], v_tmp1[p], v_zero) for p in range(n_active_prev)])
+            # tmp1 = 2 - tmp1
+            valu_ops.append([("-", v_tmp1[p], v_two, v_tmp1[p]) for p in range(n_active_prev)])
+            # idx = idx * 2 + tmp1
+            valu_ops.append([("multiply_add", v_idx_prev[p], v_idx_prev[p], v_two, v_tmp1[p]) for p in range(n_active_prev)])
+            # tmp1 = idx < n_nodes
+            valu_ops.append([("<", v_tmp1[p], v_idx_prev[p], v_n_nodes) for p in range(n_active_prev)])
+            # idx = idx * tmp1
+            valu_ops.append([("*", v_idx_prev[p], v_idx_prev[p], v_tmp1[p]) for p in range(n_active_prev)])
+
+        valu_idx = 0
 
         # Prepare stores if any
         store_idx = 0
@@ -234,10 +250,10 @@ class KernelBuilder:
             bundle = {"alu": [("+", tmp_addrs[p], self.scratch["forest_values_p"], v_idx_cur[p] + vi)
                               for p in range(n_active_cur)]}
 
-            # Add VALU hash operation if available
-            if hash_idx < len(hash_slots):
-                bundle["valu"] = hash_slots[hash_idx]
-                hash_idx += 1
+            # Add VALU operation if available
+            if valu_idx < len(valu_ops):
+                bundle["valu"] = valu_ops[valu_idx]
+                valu_idx += 1
 
             # Add store if available
             if store_idx < len(stores_to_do):
@@ -253,10 +269,10 @@ class KernelBuilder:
                     load_slots.append(("load", v_node_val_cur[p + 1] + vi, tmp_addrs[p + 1]))
                 load_bundle = {"load": load_slots}
 
-                # Add VALU hash operation if available
-                if hash_idx < len(hash_slots):
-                    load_bundle["valu"] = hash_slots[hash_idx]
-                    hash_idx += 1
+                # Add VALU operation if available
+                if valu_idx < len(valu_ops):
+                    load_bundle["valu"] = valu_ops[valu_idx]
+                    valu_idx += 1
 
                 # Add store if available
                 if store_idx < len(stores_to_do):
@@ -265,10 +281,10 @@ class KernelBuilder:
 
                 slots.append(load_bundle)
 
-        # Finish any remaining hash operations
-        while hash_idx < len(hash_slots):
-            bundle = {"valu": hash_slots[hash_idx]}
-            hash_idx += 1
+        # Finish any remaining VALU operations
+        while valu_idx < len(valu_ops):
+            bundle = {"valu": valu_ops[valu_idx]}
+            valu_idx += 1
             # Add remaining stores if any
             if store_idx < len(stores_to_do):
                 bundle["store"] = stores_to_do[store_idx]
@@ -434,9 +450,9 @@ class KernelBuilder:
                     iter_body.append({"store": [("vstore", pp_idx_addrs[p], pp_v_idx[p]),
                                                 ("vstore", pp_val_addrs[p], pp_v_val[p])]})
 
-            # === Phase 1: Gather current + Hash previous (THE KEY OPTIMIZATION) ===
+            # === Phase 1: Gather current + Hash+Index previous (THE KEY OPTIMIZATION) ===
             if prev_state:
-                # We have a previous iteration to hash while gathering
+                # We have a previous iteration to compute while gathering
                 pv_n, pv_v_idx, pv_v_val, pv_idx_addrs, pv_val_addrs, pv_node_val_set, pv_xor_done = prev_state
                 pv_node_val = v_node_val[pv_node_val_set]
 
@@ -444,15 +460,14 @@ class KernelBuilder:
                 if not pv_xor_done:
                     iter_body.append({"valu": [("^", pv_v_val[p], pv_v_val[p], pv_node_val[p]) for p in range(pv_n)]})
 
-                # Now do gather + hash in parallel (no pending stores here, already handled above)
-                iter_body.extend(self.build_gather_with_hash(
+                # Now do gather + hash + index_update in parallel
+                iter_body.extend(self.build_gather_with_compute(
                     cur_v_idx, cur_node_val, tmp_addrs, n_active,
-                    pv_v_val, v_tmp1, hash_vecs, pv_n,
+                    pv_v_idx, pv_v_val, v_tmp1, hash_vecs,
+                    v_zero, v_two, v_n_nodes, pv_n,
                     None  # No pending stores - already handled
                 ))
-
-                # Index update for previous iteration
-                iter_body.extend(self.build_index_update(pv_v_idx, pv_v_val, v_tmp1, v_zero, v_two, v_n_nodes, pv_n))
+                # Index update is now done inside build_gather_with_compute
             else:
                 # No previous iteration - just gather (first iteration)
                 iter_body.extend(self.build_gather(cur_v_idx, cur_node_val, tmp_addrs, n_active))
