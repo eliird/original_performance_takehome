@@ -338,14 +338,20 @@ class KernelBuilder:
         return slots
 
     def build_gather_with_remaining_valu(self, v_idx_cur, v_node_val_cur, tmp_addrs, n_active_cur,
-                                          remaining_valu_ops, precomputed_gather_addrs=0):
+                                          remaining_valu_ops, precomputed_gather_addrs=0,
+                                          next_vload_alu_ops=None):
         """
         Gather with any remaining VALU ops interleaved.
         Simpler version that doesn't build its own VALU ops - uses pre-built list.
+
+        next_vload_alu_ops: List of ALU ops for computing next iteration's vload addresses.
+                           These will be inserted during the last gather cycles when ALU is free.
         """
         slots = []
         tmp_addrs_0, tmp_addrs_1 = tmp_addrs[0], tmp_addrs[1]
         valu_idx = 0
+        next_alu_idx = 0
+        next_alu_ops = next_vload_alu_ops if next_vload_alu_ops else []
 
         for vi in range(VLEN):
             cur_buf = tmp_addrs_0 if vi % 2 == 0 else tmp_addrs_1
@@ -358,10 +364,14 @@ class KernelBuilder:
 
                 load_bundle = {"load": load_slots}
 
-                # Compute addresses for vi+1
+                # Compute addresses for vi+1 (for current gather)
                 if load_cycle == 0 and vi + 1 < VLEN and vi + 1 >= precomputed_gather_addrs:
                     load_bundle["alu"] = [("+", next_buf[q], self.scratch["forest_values_p"], v_idx_cur[q] + vi + 1)
                                           for q in range(n_active_cur)]
+                # Or use ALU for next iteration's vload addresses if gather addresses done
+                elif next_alu_idx < len(next_alu_ops):
+                    load_bundle["alu"] = next_alu_ops[next_alu_idx]
+                    next_alu_idx += 1
 
                 # Add remaining VALU if any
                 if valu_idx < len(remaining_valu_ops):
@@ -372,8 +382,18 @@ class KernelBuilder:
 
         # Finish any remaining VALU ops
         while valu_idx < len(remaining_valu_ops):
-            slots.append({"valu": remaining_valu_ops[valu_idx]})
+            bundle = {"valu": remaining_valu_ops[valu_idx]}
             valu_idx += 1
+            # Also add any remaining next vload ALU ops
+            if next_alu_idx < len(next_alu_ops):
+                bundle["alu"] = next_alu_ops[next_alu_idx]
+                next_alu_idx += 1
+            slots.append(bundle)
+
+        # Finish any remaining next vload ALU ops (shouldn't happen normally)
+        while next_alu_idx < len(next_alu_ops):
+            slots.append({"alu": next_alu_ops[next_alu_idx]})
+            next_alu_idx += 1
 
         return slots
 
@@ -594,26 +614,30 @@ class KernelBuilder:
             iter_body.append(first_gather_bundle)
             precomputed_gather_addrs = 1
 
-            # Gather with remaining VALU ops interleaved
-            remaining_valu = valu_ops_for_vload[valu_idx:] if valu_idx < len(valu_ops_for_vload) else []
-            iter_body.extend(self.build_gather_with_remaining_valu(
-                cur_v_idx, cur_node_val, tmp_addrs, n_active,
-                remaining_valu, precomputed_gather_addrs
-            ))
-
-            # === Phase 2: Precompute NEXT iteration's vload addresses ===
-            # This happens at the end, using ALU slots that would otherwise be idle
+            # Build next iteration's vload address ops (to be interleaved during gather)
+            next_vload_alu_ops = []
             if next_iter:
-                next_rnd, next_base_i, next_n_active = next_iter
-                alu_slots = []
+                _, next_base_i, next_n_active = next_iter
+                # Split into chunks that fit in one ALU cycle (max 12 ops)
+                alu_ops_list = []
                 for p in range(next_n_active):
                     offset_const = self.scratch_const(next_base_i + p * VLEN)
-                    alu_slots.append(("+", next_idx_addrs[p], self.scratch["inp_indices_p"], offset_const))
-                    alu_slots.append(("+", next_val_addrs[p], self.scratch["inp_values_p"], offset_const))
-                iter_body.append({"alu": alu_slots})
+                    alu_ops_list.append(("+", next_idx_addrs[p], self.scratch["inp_indices_p"], offset_const))
+                    alu_ops_list.append(("+", next_val_addrs[p], self.scratch["inp_values_p"], offset_const))
+                # Pack into bundles of up to 12 ops
+                for i in range(0, len(alu_ops_list), 12):
+                    next_vload_alu_ops.append(alu_ops_list[i:i+12])
                 next_vload_addrs_ready = True
             else:
                 next_vload_addrs_ready = False
+
+            # Gather with remaining VALU ops interleaved, AND next vload address computation
+            remaining_valu = valu_ops_for_vload[valu_idx:] if valu_idx < len(valu_ops_for_vload) else []
+            iter_body.extend(self.build_gather_with_remaining_valu(
+                cur_v_idx, cur_node_val, tmp_addrs, n_active,
+                remaining_valu, precomputed_gather_addrs,
+                next_vload_alu_ops
+            ))
 
             # Update pipeline state
             # Note: The VALU work for the OLD pipeline[1] (i-1) was done during THIS iteration.
