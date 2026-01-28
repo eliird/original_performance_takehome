@@ -337,6 +337,46 @@ class KernelBuilder:
 
         return slots
 
+    def build_gather_with_remaining_valu(self, v_idx_cur, v_node_val_cur, tmp_addrs, n_active_cur,
+                                          remaining_valu_ops, precomputed_gather_addrs=0):
+        """
+        Gather with any remaining VALU ops interleaved.
+        Simpler version that doesn't build its own VALU ops - uses pre-built list.
+        """
+        slots = []
+        tmp_addrs_0, tmp_addrs_1 = tmp_addrs[0], tmp_addrs[1]
+        valu_idx = 0
+
+        for vi in range(VLEN):
+            cur_buf = tmp_addrs_0 if vi % 2 == 0 else tmp_addrs_1
+            next_buf = tmp_addrs_1 if vi % 2 == 0 else tmp_addrs_0
+
+            for load_cycle, p in enumerate(range(0, n_active_cur, 2)):
+                load_slots = [("load", v_node_val_cur[p] + vi, cur_buf[p])]
+                if p + 1 < n_active_cur:
+                    load_slots.append(("load", v_node_val_cur[p + 1] + vi, cur_buf[p + 1]))
+
+                load_bundle = {"load": load_slots}
+
+                # Compute addresses for vi+1
+                if load_cycle == 0 and vi + 1 < VLEN and vi + 1 >= precomputed_gather_addrs:
+                    load_bundle["alu"] = [("+", next_buf[q], self.scratch["forest_values_p"], v_idx_cur[q] + vi + 1)
+                                          for q in range(n_active_cur)]
+
+                # Add remaining VALU if any
+                if valu_idx < len(remaining_valu_ops):
+                    load_bundle["valu"] = remaining_valu_ops[valu_idx]
+                    valu_idx += 1
+
+                slots.append(load_bundle)
+
+        # Finish any remaining VALU ops
+        while valu_idx < len(remaining_valu_ops):
+            slots.append({"valu": remaining_valu_ops[valu_idx]})
+            valu_idx += 1
+
+        return slots
+
     def build_index_update(self, v_idx, v_val, v_tmp1, v_zero, v_two, v_n_nodes, n_active):
         """
         Compute next index: idx = 2*idx + (1 if val%2==0 else 2), then wrap if >= n_nodes.
@@ -439,18 +479,24 @@ class KernelBuilder:
                 n_active = min(N_PARALLEL, (remaining + VLEN - 1) // VLEN)
                 iterations.append((rnd, base_i, n_active))
 
-        # === Deep 3-batch pipeline ===
+        # === Deep 3-batch pipeline with precomputed vload addresses ===
         # Pipeline stages (for iteration i in steady state):
         #   - STORE[i-2]: Store results from 2 iterations ago
+        #   - VLOAD[i]: Load idx/val with addresses precomputed in i-1
         #   - GATHER[i] + HASH[i-1]: Current gather overlapped with previous hash
-        #   - INDEX[i-1]: Index update for previous iteration
-        #   - VLOAD[i+1]: Prefetch next iteration's data
+        #   - PRECOMPUTE[i+1]: Compute vload addresses for next iteration
+        #
+        # Key optimization: vload addresses are computed at END of previous iteration
+        # so vloads can start immediately in cycle 0
 
         # State tracking for 3 batches in flight
         # Each entry: (n_active, v_idx, v_val, idx_addrs, val_addrs, v_node_val_set, xor_done)
         pipeline = [None, None, None]  # [i-2 (store), i-1 (compute), i (load/gather)]
         use_set = 0  # Cycles through 0, 1, 2 for triple buffering
         node_val_set = 0  # Cycles through 0, 1 for v_node_val double buffering
+
+        # Track if next iteration's vload addresses are precomputed
+        next_vload_addrs_ready = False
 
         for iter_idx, (rnd, base_i, n_active) in enumerate(iterations):
             iter_body = []
@@ -465,67 +511,114 @@ class KernelBuilder:
             prev_state = pipeline[1]  # i-1 slot
             prev_prev_state = pipeline[0]  # i-2 slot (for stores)
 
-            # === Phase 0: Compute addresses and load idx/val for current iteration ===
-            # Compute vload addresses first
-            alu_slots = []
-            for p in range(n_active):
-                offset_const = self.scratch_const(base_i + p * VLEN)
-                alu_slots.append(("+", cur_idx_addrs[p], self.scratch["inp_indices_p"], offset_const))
-                alu_slots.append(("+", cur_val_addrs[p], self.scratch["inp_values_p"], offset_const))
-            iter_body.append({"alu": alu_slots})
+            # Look ahead to next iteration for address precomputation
+            next_iter = iterations[iter_idx + 1] if iter_idx + 1 < len(iterations) else None
+            next_set = (use_set + 1) % 3
+            next_idx_addrs, next_val_addrs = idx_addrs[next_set], val_addrs[next_set]
 
-            # Load idx/val vectors, overlapped with stores
+            # === Phase 0: VLOAD + STORE (addresses already computed or compute now) ===
             tmp_addrs_0 = tmp_addrs[0]
             precomputed_gather_addrs = 0
+
+            if not next_vload_addrs_ready:
+                # First iteration: compute vload addresses now
+                alu_slots = []
+                for p in range(n_active):
+                    offset_const = self.scratch_const(base_i + p * VLEN)
+                    alu_slots.append(("+", cur_idx_addrs[p], self.scratch["inp_indices_p"], offset_const))
+                    alu_slots.append(("+", cur_val_addrs[p], self.scratch["inp_values_p"], offset_const))
+                iter_body.append({"alu": alu_slots})
+
+            # Load idx/val vectors, overlapped with stores from i-2
+            # Also overlap with VALU work from i-1 (hash continuation)
+            valu_ops_for_vload = []
+            if prev_state:
+                pv_n, pv_v_idx, pv_v_val, pv_idx_addrs, pv_val_addrs, pv_node_val_set, pv_xor_done = prev_state
+                pv_node_val = v_node_val[pv_node_val_set]
+
+                # Build all VALU ops needed for previous iteration
+                if not pv_xor_done:
+                    # XOR first
+                    valu_ops_for_vload.append([("^", pv_v_val[p], pv_v_val[p], pv_node_val[p]) for p in range(pv_n)])
+
+                # Hash ops
+                hash_ops = self.build_hash_vec_parallel(pv_v_val, v_tmp1, hash_vecs, pv_n)
+                for h in hash_ops:
+                    if isinstance(h, dict) and "valu" in h:
+                        valu_ops_for_vload.append(h["valu"])
+
+                # Index update ops
+                valu_ops_for_vload.append([("%", v_tmp1[p], pv_v_val[p], v_two) for p in range(pv_n)])
+                valu_ops_for_vload.append([("==", v_tmp1[p], v_tmp1[p], v_zero) for p in range(pv_n)])
+                valu_ops_for_vload.append([("-", v_tmp1[p], v_two, v_tmp1[p]) for p in range(pv_n)])
+                valu_ops_for_vload.append([("multiply_add", pv_v_idx[p], pv_v_idx[p], v_two, v_tmp1[p]) for p in range(pv_n)])
+                valu_ops_for_vload.append([("<", v_tmp1[p], pv_v_idx[p], v_n_nodes) for p in range(pv_n)])
+                valu_ops_for_vload.append([("*", pv_v_idx[p], pv_v_idx[p], v_tmp1[p]) for p in range(pv_n)])
+
+            valu_idx = 0
 
             for p in range(n_active):
                 bundle = {"load": [("vload", cur_v_idx[p], cur_idx_addrs[p]),
                                    ("vload", cur_v_val[p], cur_val_addrs[p])]}
+                # Overlap stores from i-2
                 if prev_prev_state and p < prev_prev_state[0]:
                     pp_n, pp_v_idx, pp_v_val, pp_idx_addrs, pp_val_addrs, _, _ = prev_prev_state
                     bundle["store"] = [("vstore", pp_idx_addrs[p], pp_v_idx[p]),
                                        ("vstore", pp_val_addrs[p], pp_v_val[p])]
+                # Overlap VALU ops from i-1 during vload phase
+                if valu_idx < len(valu_ops_for_vload):
+                    bundle["valu"] = valu_ops_for_vload[valu_idx]
+                    valu_idx += 1
                 iter_body.append(bundle)
 
             # Finish remaining stores from i-2
             if prev_prev_state:
                 pp_n, pp_v_idx, pp_v_val, pp_idx_addrs, pp_val_addrs, _, _ = prev_prev_state
                 for p in range(n_active, pp_n):
-                    iter_body.append({"store": [("vstore", pp_idx_addrs[p], pp_v_idx[p]),
-                                                ("vstore", pp_val_addrs[p], pp_v_val[p])]})
+                    bundle = {"store": [("vstore", pp_idx_addrs[p], pp_v_idx[p]),
+                                        ("vstore", pp_val_addrs[p], pp_v_val[p])]}
+                    if valu_idx < len(valu_ops_for_vload):
+                        bundle["valu"] = valu_ops_for_vload[valu_idx]
+                        valu_idx += 1
+                    iter_body.append(bundle)
 
-            # === Phase 1: Gather current + Hash+Index previous (THE KEY OPTIMIZATION) ===
-            if prev_state:
-                # We have a previous iteration to compute while gathering
-                pv_n, pv_v_idx, pv_v_val, pv_idx_addrs, pv_val_addrs, pv_node_val_set, pv_xor_done = prev_state
-                pv_node_val = v_node_val[pv_node_val_set]
+            # === Phase 1: Gather current (remaining VALU already consumed above) ===
+            # Compute first gather address, overlapped with any remaining VALU
+            first_gather_bundle = {
+                "alu": [("+", tmp_addrs_0[q], self.scratch["forest_values_p"], cur_v_idx[q] + 0)
+                        for q in range(n_active)]
+            }
+            if valu_idx < len(valu_ops_for_vload):
+                first_gather_bundle["valu"] = valu_ops_for_vload[valu_idx]
+                valu_idx += 1
+            iter_body.append(first_gather_bundle)
+            precomputed_gather_addrs = 1
 
-                # XOR previous iteration's values with gathered node values
-                # ALSO compute vi=0 gather addresses in the same cycle (ALU is free during XOR!)
-                if not pv_xor_done:
-                    iter_body.append({
-                        "valu": [("^", pv_v_val[p], pv_v_val[p], pv_node_val[p]) for p in range(pv_n)],
-                        "alu": [("+", tmp_addrs_0[q], self.scratch["forest_values_p"], cur_v_idx[q] + 0)
-                                for q in range(n_active)]
-                    })
-                    precomputed_gather_addrs = 1
+            # Gather with remaining VALU ops interleaved
+            remaining_valu = valu_ops_for_vload[valu_idx:] if valu_idx < len(valu_ops_for_vload) else []
+            iter_body.extend(self.build_gather_with_remaining_valu(
+                cur_v_idx, cur_node_val, tmp_addrs, n_active,
+                remaining_valu, precomputed_gather_addrs
+            ))
 
-                # Now do gather + hash + index_update in parallel
-                # vi=0 addresses precomputed during XOR cycle
-                iter_body.extend(self.build_gather_with_compute(
-                    cur_v_idx, cur_node_val, tmp_addrs, n_active,
-                    pv_v_idx, pv_v_val, v_tmp1, hash_vecs,
-                    v_zero, v_two, v_n_nodes, pv_n,
-                    None,  # No pending stores - already handled
-                    None,  # No vloads interleaving for now
-                    precomputed_gather_addrs
-                ))
+            # === Phase 2: Precompute NEXT iteration's vload addresses ===
+            # This happens at the end, using ALU slots that would otherwise be idle
+            if next_iter:
+                next_rnd, next_base_i, next_n_active = next_iter
+                alu_slots = []
+                for p in range(next_n_active):
+                    offset_const = self.scratch_const(next_base_i + p * VLEN)
+                    alu_slots.append(("+", next_idx_addrs[p], self.scratch["inp_indices_p"], offset_const))
+                    alu_slots.append(("+", next_val_addrs[p], self.scratch["inp_values_p"], offset_const))
+                iter_body.append({"alu": alu_slots})
+                next_vload_addrs_ready = True
             else:
-                # No previous iteration - just gather (first iteration)
-                # No XOR to overlap with, so no precomputation
-                iter_body.extend(self.build_gather(cur_v_idx, cur_node_val, tmp_addrs, n_active))
+                next_vload_addrs_ready = False
 
             # Update pipeline state
+            # Note: The VALU work for the OLD pipeline[1] (i-1) was done during THIS iteration.
+            # The NEW pipeline[1] (current iteration i) will have its VALU done during iteration i+1.
+            # So we set xor_done=False because this iteration's VALU hasn't been done yet.
             pipeline[0] = pipeline[1]  # Old i-1 becomes i-2 (ready for store)
             pipeline[1] = (n_active, cur_v_idx, cur_v_val, cur_idx_addrs, cur_val_addrs, node_val_set, False)
 
