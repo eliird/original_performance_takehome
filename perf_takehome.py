@@ -225,7 +225,6 @@ class KernelBuilder:
         v_val = [self.alloc_scratch(f"v_val_{p}", VLEN) for p in range(N_PARALLEL)]
         v_node_val = [self.alloc_scratch(f"v_node_val_{p}", VLEN) for p in range(N_PARALLEL)]
         v_tmp1 = [self.alloc_scratch(f"v_tmp1_{p}", VLEN) for p in range(N_PARALLEL)]
-        v_tmp2 = [self.alloc_scratch(f"v_tmp2_{p}", VLEN) for p in range(N_PARALLEL)]
         v_tmp3 = [self.alloc_scratch(f"v_tmp3_{p}", VLEN) for p in range(N_PARALLEL)]
 
         # Vector constants
