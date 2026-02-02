@@ -241,9 +241,9 @@ class KernelBuilder:
                 if isinstance(h, dict) and "valu" in h:
                     valu_ops.append(h["valu"])
 
-            valu_ops.append([("%", v_tmp1[p], v_val_prev[p], v_two) for p in range(n_active_prev)])
-            valu_ops.append([("==", v_tmp1[p], v_tmp1[p], v_zero) for p in range(n_active_prev)])
-            valu_ops.append([("-", v_tmp1[p], v_two, v_tmp1[p]) for p in range(n_active_prev)])
+            # Optimized index step: (val & 1) + 1 gives 1 if even, 2 if odd
+            valu_ops.append([("&", v_tmp1[p], v_val_prev[p], v_one) for p in range(n_active_prev)])
+            valu_ops.append([("+", v_tmp1[p], v_tmp1[p], v_one) for p in range(n_active_prev)])
             valu_ops.append([("multiply_add", v_idx_prev[p], v_idx_prev[p], v_two, v_tmp1[p]) for p in range(n_active_prev)])
             valu_ops.append([("<", v_tmp1[p], v_idx_prev[p], v_n_nodes) for p in range(n_active_prev)])
             valu_ops.append([("*", v_idx_prev[p], v_idx_prev[p], v_tmp1[p]) for p in range(n_active_prev)])
@@ -397,17 +397,19 @@ class KernelBuilder:
 
         return slots
 
-    def build_index_update(self, v_idx, v_val, v_tmp1, v_zero, v_two, v_n_nodes, n_active):
+    def build_index_update(self, v_idx, v_val, v_tmp1, v_one, v_two, v_n_nodes, n_active):
         """
         Compute next index: idx = 2*idx + (1 if val%2==0 else 2), then wrap if >= n_nodes.
         Uses arithmetic instead of vselect to avoid flow slot bottleneck.
+
+        Optimized: step = (val & 1) + 1
+        - If val is even (lsb=0): (0 & 1) + 1 = 1
+        - If val is odd (lsb=1): (1 & 1) + 1 = 2
         """
         slots = []
-        # tmp1 = (val % 2 == 0), gives 1 if even, 0 if odd
-        slots.append({"valu": [("%", v_tmp1[p], v_val[p], v_two) for p in range(n_active)]})
-        slots.append({"valu": [("==", v_tmp1[p], v_tmp1[p], v_zero) for p in range(n_active)]})
-        # tmp1 = 2 - tmp1: gives 1 if even (2-1=1), 2 if odd (2-0=2)
-        slots.append({"valu": [("-", v_tmp1[p], v_two, v_tmp1[p]) for p in range(n_active)]})
+        # tmp1 = (val & 1) + 1: gives 1 if even, 2 if odd
+        slots.append({"valu": [("&", v_tmp1[p], v_val[p], v_one) for p in range(n_active)]})
+        slots.append({"valu": [("+", v_tmp1[p], v_tmp1[p], v_one) for p in range(n_active)]})
         # idx = idx * 2 + tmp1 using multiply_add
         slots.append({"valu": [("multiply_add", v_idx[p], v_idx[p], v_two, v_tmp1[p]) for p in range(n_active)]})
         # Wrap: idx = idx * (idx < n_nodes)
@@ -646,10 +648,9 @@ class KernelBuilder:
                     if isinstance(h, dict) and "valu" in h:
                         valu_ops_for_vload.append(h["valu"])
 
-                # Index update ops
-                valu_ops_for_vload.append([("%", v_tmp1[p], pv_v_val[p], v_two) for p in range(pv_n)])
-                valu_ops_for_vload.append([("==", v_tmp1[p], v_tmp1[p], v_zero) for p in range(pv_n)])
-                valu_ops_for_vload.append([("-", v_tmp1[p], v_two, v_tmp1[p]) for p in range(pv_n)])
+                # Index update ops - optimized: (val & 1) + 1 gives 1 if even, 2 if odd
+                valu_ops_for_vload.append([("&", v_tmp1[p], pv_v_val[p], v_one) for p in range(pv_n)])
+                valu_ops_for_vload.append([("+", v_tmp1[p], v_tmp1[p], v_one) for p in range(pv_n)])
                 valu_ops_for_vload.append([("multiply_add", pv_v_idx[p], pv_v_idx[p], v_two, v_tmp1[p]) for p in range(pv_n)])
                 valu_ops_for_vload.append([("<", v_tmp1[p], pv_v_idx[p], v_n_nodes) for p in range(pv_n)])
                 valu_ops_for_vload.append([("*", pv_v_idx[p], pv_v_idx[p], v_tmp1[p]) for p in range(pv_n)])
@@ -960,7 +961,7 @@ class KernelBuilder:
             epilogue_body.extend(self.build_hash_vec_parallel(pv_v_val, v_tmp1, hash_vecs, pv_n))
 
             # Index update
-            epilogue_body.extend(self.build_index_update(pv_v_idx, pv_v_val, v_tmp1, v_zero, v_two, v_n_nodes, pv_n))
+            epilogue_body.extend(self.build_index_update(pv_v_idx, pv_v_val, v_tmp1, v_one, v_two, v_n_nodes, pv_n))
 
             # Store results (overlapped with stores from pipeline[0] if exists)
             if pipeline[0]:
