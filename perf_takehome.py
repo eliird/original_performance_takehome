@@ -481,6 +481,24 @@ class KernelBuilder:
         # Condition vectors for vselect (separate from v_tmp1 to avoid conflicts)
         v_cond = [self.alloc_scratch(f"v_cond_{p}", VLEN) for p in range(N_PARALLEL)]
 
+        # === Round 2 optimization: all indices are 3, 4, 5, or 6 after round 1 ===
+        # We load tree[3..6] once, then use 2-level vselect based on idx
+        node_val_3 = self.alloc_scratch("node_val_3")
+        node_val_4 = self.alloc_scratch("node_val_4")
+        node_val_5 = self.alloc_scratch("node_val_5")
+        node_val_6 = self.alloc_scratch("node_val_6")
+        v_node_val_3 = self.alloc_scratch("v_node_val_3", VLEN)
+        v_node_val_4 = self.alloc_scratch("v_node_val_4", VLEN)
+        v_node_val_5 = self.alloc_scratch("v_node_val_5", VLEN)
+        v_node_val_6 = self.alloc_scratch("v_node_val_6", VLEN)
+        v_five = self.alloc_scratch("v_five", VLEN)
+        five_const = self.scratch_const(5)
+        # Additional condition vectors for 2-level vselect
+        v_cond_low = [self.alloc_scratch(f"v_cond_low_{p}", VLEN) for p in range(N_PARALLEL)]
+        v_cond_high = [self.alloc_scratch(f"v_cond_high_{p}", VLEN) for p in range(N_PARALLEL)]
+        # Temp vectors for 2-level selection
+        v_sel_temp1 = [self.alloc_scratch(f"v_sel_temp1_{p}", VLEN) for p in range(N_PARALLEL)]
+        v_sel_temp2 = [self.alloc_scratch(f"v_sel_temp2_{p}", VLEN) for p in range(N_PARALLEL)]
 
         # === Main loop body ===
         body = []
@@ -505,6 +523,29 @@ class KernelBuilder:
         body.append({"valu": [("vbroadcast", v_node_val_1, node_val_1),
                               ("vbroadcast", v_node_val_2, node_val_2),
                               ("vbroadcast", v_one, one_const)]})
+
+        # Load tree[3..6] for Round 2 optimization
+        tmp_addr_3 = self.alloc_scratch("tmp_addr_3")
+        tmp_addr_4 = self.alloc_scratch("tmp_addr_4")
+        tmp_addr_5 = self.alloc_scratch("tmp_addr_5")
+        tmp_addr_6 = self.alloc_scratch("tmp_addr_6")
+        three_const = self.scratch_const(3)
+        four_const = self.scratch_const(4)
+        six_const = self.scratch_const(6)
+        body.append({"alu": [("+", tmp_addr_3, self.scratch["forest_values_p"], three_const),
+                             ("+", tmp_addr_4, self.scratch["forest_values_p"], four_const),
+                             ("+", tmp_addr_5, self.scratch["forest_values_p"], five_const),
+                             ("+", tmp_addr_6, self.scratch["forest_values_p"], six_const)]})
+        body.append({"load": [("load", node_val_3, tmp_addr_3),
+                              ("load", node_val_4, tmp_addr_4)]})
+        body.append({"load": [("load", node_val_5, tmp_addr_5),
+                              ("load", node_val_6, tmp_addr_6)]})
+        # Broadcast tree[3..6] values for Round 2
+        body.append({"valu": [("vbroadcast", v_node_val_3, node_val_3),
+                              ("vbroadcast", v_node_val_4, node_val_4),
+                              ("vbroadcast", v_node_val_5, node_val_5),
+                              ("vbroadcast", v_node_val_6, node_val_6),
+                              ("vbroadcast", v_five, five_const)]})
 
         # Broadcast basic constants
         body.append({"valu": [("vbroadcast", v_zero, zero_const), ("vbroadcast", v_two, two_const),
@@ -765,8 +806,105 @@ class KernelBuilder:
                     iter_body.append({"alu": next_vload_alu_ops[next_alu_idx]})
                     next_alu_idx += 1
 
+            elif effective_round == 2:
+                # === Round 2/13/24/... optimization: all indices are 3, 4, 5, or 6 ===
+                # After round 1, idx values are: 2*1+1=3, 2*1+2=4, 2*2+1=5, 2*2+2=6
+                # Use 2-level vselect with pre-loaded tree[3..6]
+                #
+                # Selection logic:
+                # cond_low = idx & 1 (1 for 3,5 and 0 for 4,6)
+                # cond_high = idx < 5 (1 for 3,4 and 0 for 5,6)
+                # temp1 = vselect(cond_low, tree[3], tree[4])  -- picks 3 if odd, 4 if even
+                # temp2 = vselect(cond_low, tree[5], tree[6])  -- picks 5 if odd, 6 if even
+                # result = vselect(cond_high, temp1, temp2)    -- picks from 3,4 group if <5
+
+                # Build condition computation VALU ops
+                valu_cond_ops = []
+                for p in range(n_active):
+                    valu_cond_ops.append(("&", v_cond_low[p], cur_v_idx[p], v_one))
+                    valu_cond_ops.append(("<", v_cond_high[p], cur_v_idx[p], v_five))
+
+                # Build all VALU ops: conditions + remaining hash/index ops
+                all_valu_ops = []
+                # Conditions (can fit 6 per cycle)
+                for i in range(0, len(valu_cond_ops), 6):
+                    all_valu_ops.append(valu_cond_ops[i:i+6])
+                all_valu_ops.extend(remaining_valu)
+
+                # vselect ops - 3 phases, each with n_active vselects (FLOW limited to 1/cycle)
+                # Phase 1a: temp1 = vselect(cond_low, tree[3], tree[4])
+                vselect_phase1a = [("vselect", v_sel_temp1[p], v_cond_low[p], v_node_val_3, v_node_val_4)
+                                   for p in range(n_active)]
+                # Phase 1b: temp2 = vselect(cond_low, tree[5], tree[6])
+                vselect_phase1b = [("vselect", v_sel_temp2[p], v_cond_low[p], v_node_val_5, v_node_val_6)
+                                   for p in range(n_active)]
+                # Phase 2: result = vselect(cond_high, temp1, temp2)
+                vselect_phase2 = [("vselect", cur_node_val[p], v_cond_high[p], v_sel_temp1[p], v_sel_temp2[p])
+                                  for p in range(n_active)]
+
+                # Emit bundles: first conditions, then vselects interleaved with VALU
+                next_alu_idx = 0
+                valu_idx_local = 0
+
+                # Count condition cycles (must complete before vselects can start)
+                n_cond_cycles = (len(valu_cond_ops) + 5) // 6  # ceiling division
+
+                # Phase 1: Condition computation (no vselects yet - data dependency!)
+                while valu_idx_local < n_cond_cycles:
+                    bundle = {"valu": all_valu_ops[valu_idx_local]}
+                    valu_idx_local += 1
+                    if next_alu_idx < len(next_vload_alu_ops):
+                        bundle["alu"] = next_vload_alu_ops[next_alu_idx]
+                        next_alu_idx += 1
+                    iter_body.append(bundle)
+
+                # Phase 2: vselect phase 1a (one per cycle due to FLOW limit)
+                for vsel in vselect_phase1a:
+                    bundle = {"flow": [vsel]}
+                    if valu_idx_local < len(all_valu_ops):
+                        bundle["valu"] = all_valu_ops[valu_idx_local]
+                        valu_idx_local += 1
+                    if next_alu_idx < len(next_vload_alu_ops):
+                        bundle["alu"] = next_vload_alu_ops[next_alu_idx]
+                        next_alu_idx += 1
+                    iter_body.append(bundle)
+
+                # Phase 3: vselect phase 1b
+                for vsel in vselect_phase1b:
+                    bundle = {"flow": [vsel]}
+                    if valu_idx_local < len(all_valu_ops):
+                        bundle["valu"] = all_valu_ops[valu_idx_local]
+                        valu_idx_local += 1
+                    if next_alu_idx < len(next_vload_alu_ops):
+                        bundle["alu"] = next_vload_alu_ops[next_alu_idx]
+                        next_alu_idx += 1
+                    iter_body.append(bundle)
+
+                # Phase 4: vselect phase 2
+                for vsel in vselect_phase2:
+                    bundle = {"flow": [vsel]}
+                    if valu_idx_local < len(all_valu_ops):
+                        bundle["valu"] = all_valu_ops[valu_idx_local]
+                        valu_idx_local += 1
+                    if next_alu_idx < len(next_vload_alu_ops):
+                        bundle["alu"] = next_vload_alu_ops[next_alu_idx]
+                        next_alu_idx += 1
+                    iter_body.append(bundle)
+
+                # Finish remaining VALU and ALU ops
+                while valu_idx_local < len(all_valu_ops) or next_alu_idx < len(next_vload_alu_ops):
+                    bundle = {}
+                    if valu_idx_local < len(all_valu_ops):
+                        bundle["valu"] = all_valu_ops[valu_idx_local]
+                        valu_idx_local += 1
+                    if next_alu_idx < len(next_vload_alu_ops):
+                        bundle["alu"] = next_vload_alu_ops[next_alu_idx]
+                        next_alu_idx += 1
+                    if bundle:
+                        iter_body.append(bundle)
+
             else:
-                # === Normal gather for Round 2+ ===
+                # === Normal gather for Round 3+ ===
                 # Compute first gather address, overlapped with any remaining VALU
                 first_gather_bundle = {
                     "alu": [("+", tmp_addrs_0[q], self.scratch["forest_values_p"], cur_v_idx[q] + 0)
